@@ -7,186 +7,65 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    :root{--bg:#0a0f1a;--surface:#111827;--border:#1e293b;--accent:#00d4aa;--accent2:#4da6ff;--text:#e2e8f0;--dim:#64748b;--mut:#475569}
+    body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;min-height:100vh;overflow-x:hidden}
+    body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,212,170,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,170,.03) 1px,transparent 1px);background-size:60px 60px;pointer-events:none;z-index:0}
+    .container{max-width:900px;margin:0 auto;padding:60px 24px 80px;position:relative;z-index:1}
+    header{text-align:center;margin-bottom:48px;animation:fadeUp .6s ease both}
+    .lab-tag{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:4px;text-transform:uppercase;color:var(--accent);margin-bottom:16px;opacity:.8}
+    h1{font-family:'JetBrains Mono',monospace;font-size:clamp(28px,5vw,42px);font-weight:800;letter-spacing:-.5px;margin-bottom:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .subtitle{font-size:15px;color:var(--dim);line-height:1.6;max-width:520px;margin:0 auto}
+    .subtitle a{color:var(--accent2);text-decoration:none}.subtitle a:hover{text-decoration:underline}
+    .course-badge{display:inline-block;margin-top:20px;padding:6px 16px;border:1px solid var(--border);border-radius:20px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mut);background:var(--surface)}
 
-    :root {
-      --bg: #0a0f1a;
-      --surface: #111827;
-      --border: #1e293b;
-      --accent: #00d4aa;
-      --accent2: #4da6ff;
-      --text: #e2e8f0;
-      --dim: #64748b;
-      --mut: #475569;
-    }
-
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Inter', system-ui, sans-serif;
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image:
-        linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px);
-      background-size: 60px 60px;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 60px 24px 80px;
-      position: relative;
-      z-index: 1;
-    }
-
-    header { text-align: center; margin-bottom: 56px; }
-
-    .lab-tag {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px; font-weight: 600;
-      letter-spacing: 4px; text-transform: uppercase;
-      color: var(--accent); margin-bottom: 16px; opacity: 0.8;
-    }
-
-    h1 {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: clamp(28px, 5vw, 42px); font-weight: 800;
-      letter-spacing: -0.5px; margin-bottom: 12px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-
-    .subtitle {
-      font-size: 15px; color: var(--dim); line-height: 1.6;
-      max-width: 520px; margin: 0 auto;
-    }
-    .subtitle a { color: var(--accent2); text-decoration: none; }
-    .subtitle a:hover { text-decoration: underline; }
-
-    .course-badge {
-      display: inline-block; margin-top: 20px; padding: 6px 16px;
-      border: 1px solid var(--border); border-radius: 20px;
-      font-family: 'JetBrains Mono', monospace; font-size: 12px;
-      color: var(--mut); background: var(--surface);
-    }
+    /* Toolbar */
+    .toolbar{display:none;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+    .toolbar-group{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--dim)}
+    .sort-btn,.toggle-btn{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:5px 12px;cursor:pointer;transition:all .2s;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:var(--dim)}
+    .sort-btn:hover,.toggle-btn:hover{border-color:var(--accent);color:var(--accent)}
+    .sort-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,212,170,.08)}
+    .toggle-btn.active{border-color:var(--accent2);color:var(--accent2);background:rgba(77,166,255,.08)}
 
     /* Demos */
-    .demos { display: flex; flex-direction: column; gap: 16px; }
+    .demos{display:flex;flex-direction:column;gap:10px}
 
-    .demo-card {
-      display: block; background: var(--surface);
-      border: 1px solid var(--border); border-radius: 14px;
-      padding: 28px 28px 24px; text-decoration: none; color: var(--text);
-      transition: all 0.25s ease; position: relative; overflow: hidden;
-      animation: fadeUp 0.5s ease both;
-    }
-    .demo-card::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-      background: linear-gradient(90deg, transparent, var(--accent), transparent);
-      opacity: 0; transition: opacity 0.3s;
-    }
-    .demo-card:hover {
-      border-color: var(--accent); transform: translateY(-2px);
-      box-shadow: 0 8px 32px rgba(0, 212, 170, 0.08);
-    }
-    .demo-card:hover::before { opacity: 1; }
+    .demo-card{display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 20px;text-decoration:none;color:var(--text);transition:all .2s ease;position:relative;overflow:hidden;animation:fadeUp .4s ease both}
+    .demo-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0;transition:opacity .3s}
+    .demo-card:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,212,170,.06)}
+    .demo-card:hover::before{opacity:1}
 
-    .demo-header {
-      display: flex; align-items: flex-start; justify-content: space-between;
-      gap: 16px; margin-bottom: 10px;
-    }
-    .demo-title {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 17px; font-weight: 700; color: var(--text);
-    }
-    .demo-arrow {
-      font-size: 18px; color: var(--accent); opacity: 0;
-      transform: translateX(-8px); transition: all 0.25s;
-      flex-shrink: 0; margin-top: 2px;
-    }
-    .demo-card:hover .demo-arrow { opacity: 1; transform: translateX(0); }
+    .demo-main{flex:1;min-width:0}
+    .demo-title{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .demo-compact-meta{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mut);margin-top:2px;display:flex;gap:12px;align-items:center}
+    .lang-dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+    .demo-arrow{font-size:16px;color:var(--accent);opacity:0;transform:translateX(-6px);transition:all .2s;flex-shrink:0;margin-left:12px}
+    .demo-card:hover .demo-arrow{opacity:1;transform:translateX(0)}
 
-    .demo-desc {
-      font-size: 14px; color: var(--dim); line-height: 1.65; margin-bottom: 14px;
-    }
-    .demo-meta {
-      display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
-      font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--mut);
-    }
-    .demo-lang {
-      display: flex; align-items: center; gap: 5px;
-    }
-    .lang-dot {
-      width: 8px; height: 8px; border-radius: 50%; display: inline-block;
-    }
+    /* Detail mode extras (hidden by default) */
+    .demo-detail{display:none;margin-top:10px}
+    .demos.detail-mode .demo-card{padding:24px 24px 20px;align-items:flex-start;flex-direction:column}
+    .demos.detail-mode .demo-card .demo-row{display:flex;align-items:center;width:100%}
+    .demos.detail-mode .demo-detail{display:block}
+    .demos.detail-mode .demo-arrow{position:absolute;top:24px;right:20px}
 
-    .demo-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
-    .tag {
-      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
-      padding: 3px 10px; border-radius: 6px;
-      background: rgba(0, 212, 170, 0.08); color: var(--accent);
-      border: 1px solid rgba(0, 212, 170, 0.15);
-    }
+    .demo-desc{font-size:13px;color:var(--dim);line-height:1.6;margin-bottom:10px}
+    .demo-tags{display:flex;gap:6px;flex-wrap:wrap}
+    .tag{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;padding:2px 8px;border-radius:5px;background:rgba(0,212,170,.08);color:var(--accent);border:1px solid rgba(0,212,170,.15)}
 
-    /* Sort controls */
-    .sort-bar {
-      display: flex; align-items: center; justify-content: flex-end;
-      gap: 8px; margin-bottom: 16px;
-      font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--dim);
-    }
-    .sort-btn {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-      padding: 5px 12px; cursor: pointer; transition: all 0.2s;
-      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
-      color: var(--dim);
-    }
-    .sort-btn:hover { border-color: var(--accent); color: var(--accent); }
-    .sort-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,170,0.08); }
+    .loading{text-align:center;padding:60px 0;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--dim)}
+    .loading-dot{animation:blink 1.2s infinite}
+    @keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
 
-    /* Loading / empty states */
-    .loading {
-      text-align: center; padding: 60px 0;
-      font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--dim);
-    }
-    .loading-dot { animation: blink 1.2s infinite; }
-    @keyframes blink { 0%,100%{opacity:0.2} 50%{opacity:1} }
+    footer{text-align:center;margin-top:64px;padding-top:32px;border-top:1px solid var(--border);animation:fadeUp .6s ease .5s both}
+    .footer-text{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mut);line-height:1.8}
+    .footer-text a{color:var(--dim);text-decoration:none}.footer-text a:hover{color:var(--accent)}
 
-    /* Footer */
-    footer {
-      text-align: center; margin-top: 64px; padding-top: 32px;
-      border-top: 1px solid var(--border);
-    }
-    .footer-text {
-      font-family: 'JetBrains Mono', monospace; font-size: 12px;
-      color: var(--mut); line-height: 1.8;
-    }
-    .footer-text a { color: var(--dim); text-decoration: none; }
-    .footer-text a:hover { color: var(--accent); }
-
-    @media (max-width: 600px) {
-      .container { padding: 40px 16px 60px; }
-      .demo-card { padding: 20px; }
-    }
-
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(16px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    header { animation: fadeUp 0.6s ease both; }
-    footer { animation: fadeUp 0.6s ease 0.5s both; }
+    @media(max-width:600px){.container{padding:40px 16px 60px}.toolbar{gap:8px}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
   </style>
 </head>
 <body>
-
 <div class="container">
   <header>
     <div class="lab-tag">DGIST · Robotics & Mechatronics</div>
@@ -198,17 +77,20 @@
     <div class="course-badge">RT604 SLAM · Spring 2026</div>
   </header>
 
-  <div class="sort-bar" id="sort-bar" style="display:none">
-    <span>Sort by:</span>
-    <button class="sort-btn active" data-sort="updated">Latest commit</button>
-    <button class="sort-btn" data-sort="created">Created</button>
-    <button class="sort-btn" data-sort="name">A-Z</button>
+  <div class="toolbar" id="toolbar">
+    <div class="toolbar-group">
+      <span>Sort:</span>
+      <button class="sort-btn active" data-sort="name">A-Z</button>
+      <button class="sort-btn" data-sort="updated">Latest commit</button>
+      <button class="sort-btn" data-sort="created">Created</button>
+    </div>
+    <div class="toolbar-group">
+      <button class="toggle-btn" id="detail-toggle">Show details</button>
+    </div>
   </div>
 
   <div class="demos" id="demos">
-    <div class="loading">
-      Loading repositories<span class="loading-dot">...</span>
-    </div>
+    <div class="loading">Loading repositories<span class="loading-dot">...</span></div>
   </div>
 
   <footer>
@@ -222,142 +104,113 @@
 
 <script>
   const ORG = 'dgist-slam';
-  const LANDING_REPO = `${ORG}.github.io`; // exclude this repo itself
+  const LANDING_REPO = `${ORG}.github.io`;
 
-  // Language colors (GitHub style)
   const LANG_COLORS = {
-    JavaScript: '#f1e05a',
-    TypeScript: '#3178c6',
-    HTML: '#e34c26',
-    CSS: '#563d7c',
-    Python: '#3572A5',
-    'Jupyter Notebook': '#DA5B0B',
-    C: '#555555',
-    'C++': '#f34b7d',
+    JavaScript:'#f1e05a',TypeScript:'#3178c6',HTML:'#e34c26',CSS:'#563d7c',
+    Python:'#3572A5','Jupyter Notebook':'#DA5B0B',C:'#555555','C++':'#f34b7d',
   };
-
-  // Tag color rotation
   const TAG_COLORS = [
-    { bg: 'rgba(0,212,170,0.08)', fg: '#00d4aa', bd: 'rgba(0,212,170,0.15)' },
-    { bg: 'rgba(77,166,255,0.08)', fg: '#4da6ff', bd: 'rgba(77,166,255,0.15)' },
-    { bg: 'rgba(255,140,66,0.08)', fg: '#ff8c42', bd: 'rgba(255,140,66,0.15)' },
-    { bg: 'rgba(255,92,160,0.08)', fg: '#ff5ca0', bd: 'rgba(255,92,160,0.15)' },
-    { bg: 'rgba(251,191,36,0.08)', fg: '#fbbf24', bd: 'rgba(251,191,36,0.15)' },
+    {bg:'rgba(0,212,170,.08)',fg:'#00d4aa',bd:'rgba(0,212,170,.15)'},
+    {bg:'rgba(77,166,255,.08)',fg:'#4da6ff',bd:'rgba(77,166,255,.15)'},
+    {bg:'rgba(255,140,66,.08)',fg:'#ff8c42',bd:'rgba(255,140,66,.15)'},
+    {bg:'rgba(255,92,160,.08)',fg:'#ff5ca0',bd:'rgba(255,92,160,.15)'},
+    {bg:'rgba(251,191,36,.08)',fg:'#fbbf24',bd:'rgba(251,191,36,.15)'},
   ];
 
-  function timeAgo(dateStr) {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    if (days < 30) return `${days}d ago`;
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  function timeAgo(d){
+    const m=Math.floor((Date.now()-new Date(d).getTime())/60000);
+    if(m<60)return`${m}m ago`;const h=Math.floor(m/60);
+    if(h<24)return`${h}h ago`;const dy=Math.floor(h/24);
+    if(dy<30)return`${dy}d ago`;
+    return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   }
 
-  function getPagesUrl(repo) {
-    // If homepage is set, use it; otherwise construct from name
-    if (repo.homepage) return repo.homepage;
-    return `https://${ORG}.github.io/${repo.name}/`;
-  }
+  function getPagesUrl(repo){return repo.homepage||`https://${ORG}.github.io/${repo.name}/`}
 
-  function createCard(repo, index) {
-    const url = getPagesUrl(repo);
-    const desc = repo.description || 'No description provided (TBD).';
-    const lang = repo.language;
-    const topics = repo.topics || [];
-    const updated = timeAgo(repo.pushed_at);
+  function createCard(repo, i){
+    const url=getPagesUrl(repo);
+    const desc=repo.description||'No description provided (TBD).';
+    const lang=repo.language;
+    const topics=repo.topics||[];
+    const updated=timeAgo(repo.pushed_at);
 
-    const card = document.createElement('a');
-    card.className = 'demo-card';
-    card.href = url;
-    card.target = '_blank';
-    card.rel = 'noopener';
-    card.style.animationDelay = `${0.08 * index}s`;
+    const a=document.createElement('a');
+    a.className='demo-card';
+    a.href=url;a.target='_blank';a.rel='noopener';
+    a.style.animationDelay=`${.05*i}s`;
 
-    let tagsHtml = '';
-    if (topics.length > 0) {
-      tagsHtml = '<div class="demo-tags">' +
-        topics.map((t, i) => {
-          const c = TAG_COLORS[i % TAG_COLORS.length];
-          return `<span class="tag" style="background:${c.bg};color:${c.fg};border-color:${c.bd}">${t}</span>`;
-        }).join('') +
-        '</div>';
-    }
+    let langHtml='';
+    if(lang){const c=LANG_COLORS[lang]||'#8b949e';langHtml=`<span style="display:flex;align-items:center;gap:4px"><span class="lang-dot" style="background:${c}"></span>${lang}</span>`;}
 
-    let langHtml = '';
-    if (lang) {
-      const color = LANG_COLORS[lang] || '#8b949e';
-      langHtml = `<span class="demo-lang"><span class="lang-dot" style="background:${color}"></span>${lang}</span>`;
-    }
+    let tagsHtml='';
+    if(topics.length>0){tagsHtml='<div class="demo-tags">'+topics.map((t,j)=>{const c=TAG_COLORS[j%TAG_COLORS.length];return`<span class="tag" style="background:${c.bg};color:${c.fg};border-color:${c.bd}">${t}</span>`;}).join('')+'</div>';}
 
-    card.innerHTML = `
-      <div class="demo-header">
-        <div class="demo-title">${repo.name}</div>
+    a.innerHTML=`
+      <div class="demo-row" style="display:flex;align-items:center;width:100%">
+        <div class="demo-main">
+          <div class="demo-title">${repo.name}</div>
+          <div class="demo-compact-meta">${langHtml}<span>Updated ${updated}</span></div>
+        </div>
         <span class="demo-arrow">→</span>
       </div>
-      <div class="demo-desc">${desc}</div>
-      <div class="demo-meta">
-        ${langHtml}
-        <span>Updated ${updated}</span>
-      </div>
-      ${tagsHtml}
-    `;
-
-    return card;
+      <div class="demo-detail">
+        <div class="demo-desc">${desc}</div>
+        ${tagsHtml}
+      </div>`;
+    return a;
   }
 
-  let allRepos = [];
-  let currentSort = 'updated';
+  let allRepos=[];
+  let currentSort='name';
 
-  const SORTERS = {
-    updated: (a, b) => new Date(b.pushed_at) - new Date(a.pushed_at),
-    created: (a, b) => new Date(b.created_at) - new Date(a.created_at),
-    name: (a, b) => a.name.localeCompare(b.name),
+  const SORTERS={
+    updated:(a,b)=>new Date(b.pushed_at)-new Date(a.pushed_at),
+    created:(a,b)=>new Date(b.created_at)-new Date(a.created_at),
+    name:(a,b)=>a.name.localeCompare(b.name),
   };
 
-  function renderRepos() {
-    const container = document.getElementById('demos');
-    const sorted = [...allRepos].sort(SORTERS[currentSort]);
-    container.innerHTML = '';
-    sorted.forEach((repo, i) => container.appendChild(createCard(repo, i)));
+  function renderRepos(){
+    const c=document.getElementById('demos');
+    const sorted=[...allRepos].sort(SORTERS[currentSort]);
+    c.innerHTML='';
+    sorted.forEach((r,i)=>c.appendChild(createCard(r,i)));
   }
 
-  // Sort button clicks
-  document.getElementById('sort-bar').addEventListener('click', (e) => {
-    const btn = e.target.closest('.sort-btn');
-    if (!btn) return;
-    currentSort = btn.dataset.sort;
-    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+  // Sort buttons
+  document.getElementById('toolbar').addEventListener('click',e=>{
+    const btn=e.target.closest('.sort-btn');
+    if(!btn)return;
+    currentSort=btn.dataset.sort;
+    document.querySelectorAll('.sort-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     renderRepos();
   });
 
-  async function loadRepos() {
-    const container = document.getElementById('demos');
-    try {
-      const res = await fetch(`https://api.github.com/orgs/${ORG}/repos?type=public&sort=updated&per_page=30`);
-      if (!res.ok) throw new Error(`GitHub API ${res.status}`);
-      const repos = await res.json();
+  // Detail toggle
+  document.getElementById('detail-toggle').addEventListener('click',function(){
+    const demos=document.getElementById('demos');
+    const on=demos.classList.toggle('detail-mode');
+    this.textContent=on?'Hide details':'Show details';
+    this.classList.toggle('active',on);
+  });
 
-      allRepos = repos.filter(r => r.name !== LANDING_REPO && !r.fork && !r.archived);
-
-      if (allRepos.length === 0) {
-        container.innerHTML = '<div class="loading">No public repositories found.</div>';
-        return;
-      }
-
-      document.getElementById('sort-bar').style.display = 'flex';
+  async function loadRepos(){
+    const c=document.getElementById('demos');
+    try{
+      const res=await fetch(`https://api.github.com/orgs/${ORG}/repos?type=public&sort=updated&per_page=30`);
+      if(!res.ok)throw new Error(`GitHub API ${res.status}`);
+      const repos=await res.json();
+      allRepos=repos.filter(r=>r.name!==LANDING_REPO&&!r.fork&&!r.archived);
+      if(!allRepos.length){c.innerHTML='<div class="loading">No public repositories found.</div>';return;}
+      document.getElementById('toolbar').style.display='flex';
       renderRepos();
-    } catch (err) {
-      console.error('Failed to load repos:', err);
-      container.innerHTML = `<div class="loading">Failed to load repositories. <br><small style="color:#475569">${err.message}</small></div>`;
+    }catch(err){
+      console.error(err);
+      c.innerHTML=`<div class="loading">Failed to load repositories.<br><small style="color:#475569">${err.message}</small></div>`;
     }
   }
-
   loadRepos();
 </script>
-
 </body>
 </html>
