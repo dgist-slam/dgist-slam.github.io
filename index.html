@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DGIST SLAM Lab — Interactive Demos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0a0f1a;
+      --surface: #111827;
+      --border: #1e293b;
+      --accent: #00d4aa;
+      --accent2: #4da6ff;
+      --text: #e2e8f0;
+      --dim: #64748b;
+      --mut: #475569;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 60px 24px 80px;
+      position: relative;
+      z-index: 1;
+    }
+
+    header { text-align: center; margin-bottom: 56px; }
+
+    .lab-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 4px; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 16px; opacity: 0.8;
+    }
+
+    h1 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(28px, 5vw, 42px); font-weight: 800;
+      letter-spacing: -0.5px; margin-bottom: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+
+    .subtitle {
+      font-size: 15px; color: var(--dim); line-height: 1.6;
+      max-width: 520px; margin: 0 auto;
+    }
+    .subtitle a { color: var(--accent2); text-decoration: none; }
+    .subtitle a:hover { text-decoration: underline; }
+
+    .course-badge {
+      display: inline-block; margin-top: 20px; padding: 6px 16px;
+      border: 1px solid var(--border); border-radius: 20px;
+      font-family: 'JetBrains Mono', monospace; font-size: 12px;
+      color: var(--mut); background: var(--surface);
+    }
+
+    /* Demos */
+    .demos { display: flex; flex-direction: column; gap: 16px; }
+
+    .demo-card {
+      display: block; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 14px;
+      padding: 28px 28px 24px; text-decoration: none; color: var(--text);
+      transition: all 0.25s ease; position: relative; overflow: hidden;
+      animation: fadeUp 0.5s ease both;
+    }
+    .demo-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .demo-card:hover {
+      border-color: var(--accent); transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(0, 212, 170, 0.08);
+    }
+    .demo-card:hover::before { opacity: 1; }
+
+    .demo-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; margin-bottom: 10px;
+    }
+    .demo-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 17px; font-weight: 700; color: var(--text);
+    }
+    .demo-arrow {
+      font-size: 18px; color: var(--accent); opacity: 0;
+      transform: translateX(-8px); transition: all 0.25s;
+      flex-shrink: 0; margin-top: 2px;
+    }
+    .demo-card:hover .demo-arrow { opacity: 1; transform: translateX(0); }
+
+    .demo-desc {
+      font-size: 14px; color: var(--dim); line-height: 1.65; margin-bottom: 14px;
+    }
+    .demo-meta {
+      display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--mut);
+    }
+    .demo-lang {
+      display: flex; align-items: center; gap: 5px;
+    }
+    .lang-dot {
+      width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+    }
+
+    .demo-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+    .tag {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
+      padding: 3px 10px; border-radius: 6px;
+      background: rgba(0, 212, 170, 0.08); color: var(--accent);
+      border: 1px solid rgba(0, 212, 170, 0.15);
+    }
+
+    /* Loading / empty states */
+    .loading {
+      text-align: center; padding: 60px 0;
+      font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--dim);
+    }
+    .loading-dot { animation: blink 1.2s infinite; }
+    @keyframes blink { 0%,100%{opacity:0.2} 50%{opacity:1} }
+
+    /* Footer */
+    footer {
+      text-align: center; margin-top: 64px; padding-top: 32px;
+      border-top: 1px solid var(--border);
+    }
+    .footer-text {
+      font-family: 'JetBrains Mono', monospace; font-size: 12px;
+      color: var(--mut); line-height: 1.8;
+    }
+    .footer-text a { color: var(--dim); text-decoration: none; }
+    .footer-text a:hover { color: var(--accent); }
+
+    @media (max-width: 600px) {
+      .container { padding: 40px 16px 60px; }
+      .demo-card { padding: 20px; }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    header { animation: fadeUp 0.6s ease both; }
+    footer { animation: fadeUp 0.6s ease 0.5s both; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="lab-tag">DGIST · Robotics & Mechatronics</div>
+    <h1>Interactive Demos</h1>
+    <p class="subtitle">
+      Interactive web-based visualizations for the RT604 SLAM course and robotics research at
+      <a href="https://github.com/dgist-slam" target="_blank">DGIST APRL Lab</a>.
+    </p>
+    <div class="course-badge">RT604 SLAM · Spring 2026</div>
+  </header>
+
+  <div class="demos" id="demos">
+    <div class="loading">
+      Loading repositories<span class="loading-dot">...</span>
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-text">
+      DGIST · Dept. of Robotics & Mechatronics Engineering<br>
+      Autonomous Perception & Robot Learning (APRL) Lab<br>
+      <a href="https://github.com/dgist-slam">github.com/dgist-slam</a>
+    </div>
+  </footer>
+</div>
+
+<script>
+  const ORG = 'dgist-slam';
+  const LANDING_REPO = `${ORG}.github.io`; // exclude this repo itself
+
+  // Language colors (GitHub style)
+  const LANG_COLORS = {
+    JavaScript: '#f1e05a',
+    TypeScript: '#3178c6',
+    HTML: '#e34c26',
+    CSS: '#563d7c',
+    Python: '#3572A5',
+    'Jupyter Notebook': '#DA5B0B',
+    C: '#555555',
+    'C++': '#f34b7d',
+  };
+
+  // Tag color rotation
+  const TAG_COLORS = [
+    { bg: 'rgba(0,212,170,0.08)', fg: '#00d4aa', bd: 'rgba(0,212,170,0.15)' },
+    { bg: 'rgba(77,166,255,0.08)', fg: '#4da6ff', bd: 'rgba(77,166,255,0.15)' },
+    { bg: 'rgba(255,140,66,0.08)', fg: '#ff8c42', bd: 'rgba(255,140,66,0.15)' },
+    { bg: 'rgba(255,92,160,0.08)', fg: '#ff5ca0', bd: 'rgba(255,92,160,0.15)' },
+    { bg: 'rgba(251,191,36,0.08)', fg: '#fbbf24', bd: 'rgba(251,191,36,0.15)' },
+  ];
+
+  function timeAgo(dateStr) {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 30) return `${days}d ago`;
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function getPagesUrl(repo) {
+    // If homepage is set, use it; otherwise construct from name
+    if (repo.homepage) return repo.homepage;
+    return `https://${ORG}.github.io/${repo.name}/`;
+  }
+
+  function createCard(repo, index) {
+    const url = getPagesUrl(repo);
+    const desc = repo.description || 'No description provided.';
+    const lang = repo.language;
+    const topics = repo.topics || [];
+    const updated = timeAgo(repo.pushed_at);
+
+    const card = document.createElement('a');
+    card.className = 'demo-card';
+    card.href = url;
+    card.target = '_blank';
+    card.rel = 'noopener';
+    card.style.animationDelay = `${0.08 * index}s`;
+
+    let tagsHtml = '';
+    if (topics.length > 0) {
+      tagsHtml = '<div class="demo-tags">' +
+        topics.map((t, i) => {
+          const c = TAG_COLORS[i % TAG_COLORS.length];
+          return `<span class="tag" style="background:${c.bg};color:${c.fg};border-color:${c.bd}">${t}</span>`;
+        }).join('') +
+        '</div>';
+    }
+
+    let langHtml = '';
+    if (lang) {
+      const color = LANG_COLORS[lang] || '#8b949e';
+      langHtml = `<span class="demo-lang"><span class="lang-dot" style="background:${color}"></span>${lang}</span>`;
+    }
+
+    card.innerHTML = `
+      <div class="demo-header">
+        <div class="demo-title">${repo.name}</div>
+        <span class="demo-arrow">→</span>
+      </div>
+      <div class="demo-desc">${desc}</div>
+      <div class="demo-meta">
+        ${langHtml}
+        <span>Updated ${updated}</span>
+      </div>
+      ${tagsHtml}
+    `;
+
+    return card;
+  }
+
+  async function loadRepos() {
+    const container = document.getElementById('demos');
+    try {
+      const res = await fetch(`https://api.github.com/orgs/${ORG}/repos?type=public&sort=updated&per_page=30`);
+      if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+      const repos = await res.json();
+
+      // Filter: exclude the landing page repo and repos with no Pages
+      const filtered = repos
+        .filter(r => r.name !== LANDING_REPO && !r.fork && !r.archived)
+        .sort((a, b) => new Date(b.pushed_at) - new Date(a.pushed_at));
+
+      container.innerHTML = '';
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="loading">No public repositories found.</div>';
+        return;
+      }
+
+      filtered.forEach((repo, i) => {
+        container.appendChild(createCard(repo, i));
+      });
+    } catch (err) {
+      console.error('Failed to load repos:', err);
+      container.innerHTML = `<div class="loading">Failed to load repositories. <br><small style="color:#475569">${err.message}</small></div>`;
+    }
+  }
+
+  loadRepos();
+</script>
+
+</body>
+</html>
