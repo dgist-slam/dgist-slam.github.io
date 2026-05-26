@@ -105,6 +105,17 @@
 <script>
   const ORG = 'dgist-slam';
   const LANDING_REPO = `${ORG}.github.io`;
+  const EXTERNAL_DEMOS = [
+    {
+      name: 'classical-visual-slam-in-one-page',
+      description: 'Classical visual SLAM concepts in one page.',
+      language: 'HTML',
+      topics: ['visual-slam', 'classical-slam', 'rt604'],
+      homepage: 'https://gisbi-kim.github.io/classical-visual-slam-in-one-page/',
+      pushed_at: '2026-05-12T19:04:41Z',
+      created_at: '2026-05-12T19:02:07Z',
+    },
+  ];
 
   const LANG_COLORS = {
     JavaScript:'#f1e05a',TypeScript:'#3178c6',HTML:'#e34c26',CSS:'#563d7c',
@@ -201,7 +212,7 @@
       const res=await fetch(`https://api.github.com/orgs/${ORG}/repos?type=public&sort=updated&per_page=30`);
       if(!res.ok)throw new Error(`GitHub API ${res.status}`);
       const repos=await res.json();
-      allRepos=repos.filter(r=>r.name!==LANDING_REPO&&!r.fork&&!r.archived);
+      allRepos=[...repos.filter(r=>r.name!==LANDING_REPO&&!r.fork&&!r.archived),...EXTERNAL_DEMOS];
       if(!allRepos.length){c.innerHTML='<div class="loading">No public repositories found.</div>';return;}
       document.getElementById('toolbar').style.display='flex';
       renderRepos();
