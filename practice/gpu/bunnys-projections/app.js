@@ -1,45 +1,464 @@
-const $=id=>document.getElementById(id),sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let gl,program,buffer,ext,manifest,points,spacing=1.5,side=8,worker,waiting,playing=false,busy=false,batching=false,stop=false,rows=[],last=0,dirty=true,sceneVersion=0;
-const ctx=$('cpu').getContext('2d'),readback=new Uint8Array(640*480*4);
-function makeWorker(){worker=new Worker('cpu-worker.js');worker.onmessage=({data})=>{if(waiting){const w=waiting;waiting=null;w.resolve(data);}};worker.onerror=e=>{if(waiting){waiting.reject(new Error(e.message));waiting=null;}};}
-function request(data){return new Promise((resolve,reject)=>{waiting={resolve,reject};worker.postMessage(data);});}
-function shader(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
-function initGPU(){
- gl=$('gpu').getContext('webgl2',{antialias:false,alpha:false});if(!gl)throw Error('WebGL2 unavailable');
- program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,`#version 300 es
+const $ = (id) => document.getElementById(id),
+  sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let gl,
+  program,
+  buffer,
+  ext,
+  manifest,
+  points,
+  spacing = 1.5,
+  side = 8,
+  worker,
+  waiting,
+  playing = false,
+  busy = false,
+  batching = false,
+  stop = false,
+  rows = [],
+  last = 0,
+  dirty = true,
+  sceneVersion = 0;
+const ctx = $("cpu").getContext("2d"),
+  readback = new Uint8Array(640 * 480 * 4);
+function makeWorker() {
+  worker = new Worker("cpu-worker.js");
+  worker.onmessage = ({ data }) => {
+    if (waiting) {
+      const w = waiting;
+      waiting = null;
+      w.resolve(data);
+    }
+  };
+  worker.onerror = (e) => {
+    if (waiting) {
+      waiting.reject(new Error(e.message));
+      waiting = null;
+    }
+  };
+}
+function request(data) {
+  return new Promise((resolve, reject) => {
+    waiting = { resolve, reject };
+    worker.postMessage(data);
+  });
+}
+function shader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    throw Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function initGPU() {
+  gl = $("gpu").getContext("webgl2", { antialias: false, alpha: false });
+  if (!gl) throw Error("WebGL2 unavailable");
+  program = gl.createProgram();
+  gl.attachShader(
+    program,
+    shader(
+      gl.VERTEX_SHADER,
+      `#version 300 es
  precision highp float;layout(location=0) in vec3 p;uniform mat3 R;uniform vec3 eye;uniform int side;uniform float spacing,farZ;out float z;
  void main(){int i=gl_InstanceID/side,j=gl_InstanceID%side;vec3 off=vec3((float(i)-float(side-1)*.5)*spacing,0.,(float(j)-float(side-1)*.5)*spacing);vec3 c=R*(p+off-eye);z=c.z;
- if(c.z<=.01||c.z>=farZ){gl_Position=vec4(2.,2.,2.,1.);}else{vec2 pixel=floor(vec2(500.*c.x/c.z+320.,240.-500.*c.y/c.z));gl_Position=vec4((pixel.x+.5)/320.-1.,1.-(pixel.y+.5)/240.,2.*c.z/farZ-1.,1.);}gl_PointSize=1.;}`));
- gl.attachShader(program,shader(gl.FRAGMENT_SHADER,`#version 300 es
- precision highp float;in float z;uniform float farZ;out vec4 color;void main(){float t=clamp(z/farZ,0.,1.);vec3 a=vec3(255,89,20),b=vec3(255,225,60),c=vec3(51,158,221);color=vec4((t<.5?mix(a,b,t*2.):mix(b,c,(t-.5)*2.))/255.,1.);}`));
- gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));gl.useProgram(program);buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);gl.enable(gl.DEPTH_TEST);gl.disable(gl.DITHER);gl.viewport(0,0,640,480);gl.clearColor(245/255,245/255,245/255,1);
- ext=gl.getExtension('EXT_disjoint_timer_query_webgl2');const dbg=gl.getExtension('WEBGL_debug_renderer_info');const renderer=dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):'Renderer hidden by browser';
- $('device').textContent=`WebGL2 · ${renderer} · GPU timer ${ext?'available':'unavailable'}${/swiftshader|llvmpipe|software/i.test(renderer)?' · 소프트웨어 렌더러: 하드웨어 GPU 가속 아님':''}`;
- $('gpu').addEventListener('webglcontextlost',e=>{e.preventDefault();playing=false;$('device').textContent='GPU context lost. 격자를 줄이거나 페이지를 새로고침하세요.';gl=null;$('backend').value='CPU';dirty=true;});
+ if(c.z<=.01||c.z>=farZ){gl_Position=vec4(2.,2.,2.,1.);}else{vec2 pixel=floor(vec2(500.*c.x/c.z+320.,240.-500.*c.y/c.z));gl_Position=vec4((pixel.x+.5)/320.-1.,1.-(pixel.y+.5)/240.,2.*c.z/farZ-1.,1.);}gl_PointSize=1.;}`,
+    ),
+  );
+  gl.attachShader(
+    program,
+    shader(
+      gl.FRAGMENT_SHADER,
+      `#version 300 es
+ precision highp float;in float z;uniform float farZ;out vec4 color;void main(){float t=clamp(z/farZ,0.,1.);vec3 a=vec3(255,89,20),b=vec3(255,225,60),c=vec3(51,158,221);color=vec4((t<.5?mix(a,b,t*2.):mix(b,c,(t-.5)*2.))/255.,1.);}`,
+    ),
+  );
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+    throw Error(gl.getProgramInfoLog(program));
+  gl.useProgram(program);
+  buffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  gl.enable(gl.DEPTH_TEST);
+  gl.disable(gl.DITHER);
+  gl.viewport(0, 0, 640, 480);
+  gl.clearColor(245 / 255, 245 / 255, 245 / 255, 1);
+  ext = gl.getExtension("EXT_disjoint_timer_query_webgl2");
+  const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+  const renderer = dbg
+    ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)
+    : "Renderer hidden by browser";
+  $("device").textContent =
+    `WebGL2 · ${renderer} · GPU timer ${ext ? "available" : "unavailable"}${/swiftshader|llvmpipe|software/i.test(renderer) ? " · 소프트웨어 렌더러: 하드웨어 GPU 가속 아님" : ""}`;
+  $("gpu").addEventListener("webglcontextlost", (e) => {
+    e.preventDefault();
+    playing = false;
+    $("device").textContent =
+      "GPU context lost. 격자를 줄이거나 페이지를 새로고침하세요.";
+    gl = null;
+    $("backend").value = "CPU";
+    dirty = true;
+  });
 }
-function pose(t){const a=2*Math.PI*t+(+$('yaw').value)*Math.PI/180,extent=side*spacing/1.5,path=$('path').value;let angle=a,r=extent*(+$('distance').value),el=(+$('pitch').value)*Math.PI/180;
- if(path==='Dolly'){r*=.2+.8*(.5+.5*Math.cos(2*Math.PI*t));angle=+$('yaw').value*Math.PI/180;}if(path==='Helix')el=Math.max(-75,Math.min(85,+$('pitch').value+32.5*Math.sin(2*Math.PI*t)))*Math.PI/180;if(path==='Hover'){r*=1+.15*Math.sin(6*Math.PI*t);el+=.15*Math.sin(4*Math.PI*t);}
- let e=[r*Math.cos(el)*Math.sin(angle),.5+r*Math.sin(el),r*Math.cos(el)*Math.cos(angle)];if(path==='Fly-through'){const x=.55*Math.sin(2*Math.PI*t),z=extent*(+$('distance').value)*Math.cos(2*Math.PI*t),y=+$('yaw').value*Math.PI/180;e=[x*Math.cos(y)+z*Math.sin(y),1.1+.5*Math.sin(4*Math.PI*t)+(+$('pitch').value-25)*.02,-x*Math.sin(y)+z*Math.cos(y)];}
- const norm=v=>{const l=Math.hypot(...v);return v.map(x=>x/l);},cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],f=norm([-e[0],.5-e[1],-e[2]]),right=norm(cross(f,[0,1,0])),up=cross(right,f);return {e,r:[...right,...up,...f]};}
-const far=()=>side*spacing/1.5*3;
-function drawGPU(p){gl.useProgram(program);const u=n=>gl.getUniformLocation(program,n),r=p.r;gl.uniformMatrix3fv(u('R'),false,new Float32Array([r[0],r[3],r[6],r[1],r[4],r[7],r[2],r[5],r[8]]));gl.uniform3fv(u('eye'),p.e);gl.uniform1i(u('side'),side);gl.uniform1f(u('spacing'),spacing);gl.uniform1f(u('farZ'),far());gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.drawArraysInstanced(gl.POINTS,0,points.length/3,side*side);}
-async function measuredGPU(p){const query=ext?gl.createQuery():null;const start=performance.now();if(query)gl.beginQuery(ext.TIME_ELAPSED_EXT,query);drawGPU(p);if(query)gl.endQuery(ext.TIME_ELAPSED_EXT);gl.readPixels(0,0,640,480,gl.RGBA,gl.UNSIGNED_BYTE,readback);const wall=performance.now()-start;let timer=null;
- if(query){const deadline=performance.now()+3000;while(!gl.getQueryParameter(query,gl.QUERY_RESULT_AVAILABLE)&&performance.now()<deadline)await sleep(5);if(gl.getQueryParameter(query,gl.QUERY_RESULT_AVAILABLE)&&!gl.getParameter(ext.GPU_DISJOINT_EXT))timer=gl.getQueryParameter(query,gl.QUERY_RESULT)/1e6;gl.deleteQuery(query);}return {wall,timer};}
-async function load(){const version=++sceneVersion;playing=false;$('play').textContent='경로 재생';dirty=false;$('stats').textContent='모델 로딩 중…';while(busy)await sleep(10);busy=true;
- try{const meta=manifest[$('model').value],res=await fetch('data/'+meta.file);if(!res.ok)throw Error('Model download failed');const data=new Float32Array(await res.arrayBuffer());if(version!==sceneVersion)return;points=data.slice(0,Math.min(+$('cap').value,meta.count)*3);spacing=meta.spacing;side=+$('grid').value;if(gl){gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,points,gl.STATIC_DRAW);}await request({type:'scene',points,side,spacing});dirty=true;}catch(e){$('stats').textContent=e.message;}finally{busy=false;}}
-async function frame(now){requestAnimationFrame(frame);if(!points||busy||batching||(!playing&&!dirty))return;busy=true;const delta=last?now-last:0;last=now;if(playing)$('phase').value=(+$('phase').value+Math.min(delta,250)/20000)%1;dirty=false;
- try{const gpu=$('backend').value==='GPU'&&gl; $('gpu').hidden=!gpu;$('cpu').hidden=!!gpu;const start=performance.now();let label;if(gpu){drawGPU(pose(+$('phase').value));label=`GPU submit ${(performance.now()-start).toFixed(2)} ms (GPU 실행시간 아님)`;}else{const d=await request({type:'frame',pose:pose(+$('phase').value),far:far()});ctx.putImageData(new ImageData(d.pixels,640,480),0,0);label=`CPU compute ${d.ms.toFixed(2)} ms`;}
- $('stats').textContent=`${(points.length/3*side*side).toLocaleString()} points · ${side}×${side} instances · ${label}${playing&&delta>0?` · displayed ${(1000/delta).toFixed(1)} FPS`:''}`;}catch(e){$('stats').textContent=e.message;playing=false;}finally{busy=false;}}
-function log(text){$('log').textContent+=text+'\n';$('log').scrollTop=$('log').scrollHeight;console.log(text);}
-async function benchmark(){if(batching||!points)return;batching=true;playing=false;stop=false;$('play').textContent='경로 재생';while(busy)await sleep(10);document.querySelectorAll('#controls input,#controls select,#controls button').forEach(e=>e.disabled=true);$('bench').disabled=true;$('stop').disabled=false;$('save').disabled=true;$('log').textContent='';rows=[];
- const k=Math.max(1,Math.min(300,Math.floor(+$('k').value)||30)),phase=+$('phase').value;const settings={model:$('model').value,side,points_per_model:points.length/3,path:$('path').value,yaw:+$('yaw').value,pitch:+$('pitch').value,distance:+$('distance').value,phase,k,device:$('device').textContent};
- try{log('Warm-up: 3 frames / backend (excluded)');for(let i=0;i<3&&!stop;i++){await request({type:'frame',pose:pose(phase),far:far()});if(gl)await measuredGPU(pose(phase));}
- for(let i=0;i<k&&!stop;i++){const p=pose((phase+i/k)%1);let c,g=null;if(i%2&&gl){g=await measuredGPU(p);c=await request({type:'frame',pose:p,far:far()});}else{c=await request({type:'frame',pose:p,far:far()});if(gl)g=await measuredGPU(p);}let validation=null;if(i===0&&g){let intersection=0,union=0,error=0;for(let y=0;y<480;y++)for(let x=0;x<640;x++){const a=(y*640+x)*4,b=((479-y)*640+x)*4;const cm=c.pixels[a]!==245||c.pixels[a+1]!==245||c.pixels[a+2]!==245,gm=readback[b]!==245||readback[b+1]!==245||readback[b+2]!==245;if(cm||gm)union++;if(cm&&gm){intersection++;error+=Math.abs(c.pixels[a]-readback[b])+Math.abs(c.pixels[a+1]-readback[b+1])+Math.abs(c.pixels[a+2]-readback[b+2]);}}validation={foreground_iou:union?intersection/union:1,mean_rgb_error_on_overlap:intersection?error/(3*intersection):0};log(`First-frame image check: foreground IoU ${validation.foreground_iou.toFixed(5)}, RGB MAE ${validation.mean_rgb_error_on_overlap.toFixed(3)} / 255`);}rows.push({frame:i+1,cpu_ms:c.ms,gpu_wall_ms:g?.wall??null,gpu_timer_ms:g?.timer??null,pose:p,validation});log(`[${i+1}/${k}] CPU ${c.ms.toFixed(3)} ms | GPU wall ${g?g.wall.toFixed(3):'N/A'} ms | GPU timer ${g?.timer!=null?g.timer.toFixed(3):'N/A'} ms`);await sleep(0);}
- if(rows.length){for(const key of ['cpu_ms','gpu_wall_ms','gpu_timer_ms']){const a=rows.map(r=>r[key]).filter(x=>x!==null);if(a.length)log(`${key}: mean ${(a.reduce((x,y)=>x+y,0)/a.length).toFixed(3)} ms (${a.length} samples)`);}log(stop?'Stopped. Partial results retained.':'Done.');}
- window.lastBenchmark={settings,rows,stopped:stop};$('save').disabled=!rows.length;
- }catch(e){log('Error: '+e.message);}finally{batching=false;document.querySelectorAll('#controls input,#controls select,#controls button').forEach(e=>e.disabled=false);if(!gl)$('backend').querySelector('[value=GPU]').disabled=true;$('bench').disabled=false;$('stop').disabled=true;dirty=true;}}
-$('bench').onclick=benchmark;$('stop').onclick=()=>{stop=true;log('Stopping after the current frame…');};$('save').onclick=()=>{const u=URL.createObjectURL(new Blob([JSON.stringify(window.lastBenchmark,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=u;a.download='browser-pointcloud-benchmark.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);};
-for(const id of ['model','grid','cap'])$(id).onchange=load;for(const id of ['backend','path','yaw','pitch','distance','phase'])$(id).oninput=()=>{dirty=true;};$('play').onclick=()=>{playing=!playing;last=0;$('play').textContent=playing?'일시 정지':'경로 재생';};$('reset').onclick=()=>{for(const [id,v]of Object.entries({yaw:0,pitch:25,distance:1.2,phase:0}))$(id).value=v;dirty=true;};
-for(const canvas of [$('gpu'),$('cpu')]){let drag;canvas.onpointerdown=e=>{if(batching)return;drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);};canvas.onpointerup=()=>drag=null;canvas.onpointermove=e=>{if(!drag||batching)return;$('yaw').value=+$('yaw').value+(e.clientX-drag[0])*.4;$('pitch').value=+$('pitch').value+(e.clientY-drag[1])*.3;drag=[e.clientX,e.clientY];dirty=true;};canvas.onwheel=e=>{e.preventDefault();if(batching)return;$('distance').value=+$('distance').value+e.deltaY*.001;dirty=true;};}
-makeWorker();try{initGPU();}catch(e){gl=null;$('device').textContent=`GPU unavailable: ${e.message} · CPU mode`;$('backend').value='CPU';$('backend').querySelector('[value=GPU]').disabled=true;}
-try{const r=await fetch('data/models.json');if(!r.ok)throw Error('Manifest download failed');manifest=await r.json();await load();requestAnimationFrame(frame);}catch(e){$('stats').textContent=e.message;}
+function pose(t) {
+  const a = 2 * Math.PI * t + (+$("yaw").value * Math.PI) / 180,
+    extent = (side * spacing) / 1.5,
+    path = $("path").value;
+  let angle = a,
+    r = extent * +$("distance").value,
+    el = (+$("pitch").value * Math.PI) / 180;
+  if (path === "Dolly") {
+    r *= 0.2 + 0.8 * (0.5 + 0.5 * Math.cos(2 * Math.PI * t));
+    angle = (+$("yaw").value * Math.PI) / 180;
+  }
+  if (path === "Helix")
+    el =
+      (Math.max(
+        -75,
+        Math.min(85, +$("pitch").value + 32.5 * Math.sin(2 * Math.PI * t)),
+      ) *
+        Math.PI) /
+      180;
+  if (path === "Hover") {
+    r *= 1 + 0.15 * Math.sin(6 * Math.PI * t);
+    el += 0.15 * Math.sin(4 * Math.PI * t);
+  }
+  let e = [
+    r * Math.cos(el) * Math.sin(angle),
+    0.5 + r * Math.sin(el),
+    r * Math.cos(el) * Math.cos(angle),
+  ];
+  if (path === "Fly-through") {
+    const x = 0.55 * Math.sin(2 * Math.PI * t),
+      z = extent * +$("distance").value * Math.cos(2 * Math.PI * t),
+      y = (+$("yaw").value * Math.PI) / 180;
+    e = [
+      x * Math.cos(y) + z * Math.sin(y),
+      1.1 + 0.5 * Math.sin(4 * Math.PI * t) + (+$("pitch").value - 25) * 0.02,
+      -x * Math.sin(y) + z * Math.cos(y),
+    ];
+  }
+  const norm = (v) => {
+      const l = Math.hypot(...v);
+      return v.map((x) => x / l);
+    },
+    cross = (a, b) => [
+      a[1] * b[2] - a[2] * b[1],
+      a[2] * b[0] - a[0] * b[2],
+      a[0] * b[1] - a[1] * b[0],
+    ],
+    f = norm([-e[0], 0.5 - e[1], -e[2]]),
+    right = norm(cross(f, [0, 1, 0])),
+    up = cross(right, f);
+  return { e, r: [...right, ...up, ...f] };
+}
+const far = () => ((side * spacing) / 1.5) * 3;
+function drawGPU(p) {
+  gl.useProgram(program);
+  const u = (n) => gl.getUniformLocation(program, n),
+    r = p.r;
+  gl.uniformMatrix3fv(
+    u("R"),
+    false,
+    new Float32Array([r[0], r[3], r[6], r[1], r[4], r[7], r[2], r[5], r[8]]),
+  );
+  gl.uniform3fv(u("eye"), p.e);
+  gl.uniform1i(u("side"), side);
+  gl.uniform1f(u("spacing"), spacing);
+  gl.uniform1f(u("farZ"), far());
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.drawArraysInstanced(gl.POINTS, 0, points.length / 3, side * side);
+}
+async function measuredGPU(p) {
+  const query = ext ? gl.createQuery() : null;
+  const start = performance.now();
+  if (query) gl.beginQuery(ext.TIME_ELAPSED_EXT, query);
+  drawGPU(p);
+  if (query) gl.endQuery(ext.TIME_ELAPSED_EXT);
+  gl.readPixels(0, 0, 640, 480, gl.RGBA, gl.UNSIGNED_BYTE, readback);
+  const wall = performance.now() - start;
+  let timer = null;
+  if (query) {
+    const deadline = performance.now() + 3000;
+    while (
+      !gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE) &&
+      performance.now() < deadline
+    )
+      await sleep(5);
+    if (
+      gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE) &&
+      !gl.getParameter(ext.GPU_DISJOINT_EXT)
+    )
+      timer = gl.getQueryParameter(query, gl.QUERY_RESULT) / 1e6;
+    gl.deleteQuery(query);
+  }
+  return { wall, timer };
+}
+async function load() {
+  const version = ++sceneVersion;
+  playing = false;
+  $("play").textContent = "경로 재생";
+  dirty = false;
+  $("stats").textContent = "모델 로딩 중…";
+  while (busy) await sleep(10);
+  busy = true;
+  try {
+    const meta = manifest[$("model").value],
+      res = await fetch("data/" + meta.file);
+    if (!res.ok) throw Error("Model download failed");
+    const data = new Float32Array(await res.arrayBuffer());
+    if (version !== sceneVersion) return;
+    points = data.slice(0, Math.min(+$("cap").value, meta.count) * 3);
+    spacing = meta.spacing;
+    side = +$("grid").value;
+    if (gl) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, points, gl.STATIC_DRAW);
+    }
+    await request({ type: "scene", points, side, spacing });
+    dirty = true;
+  } catch (e) {
+    $("stats").textContent = e.message;
+  } finally {
+    busy = false;
+  }
+}
+async function frame(now) {
+  requestAnimationFrame(frame);
+  if (!points || busy || batching || (!playing && !dirty)) return;
+  busy = true;
+  const delta = last ? now - last : 0;
+  last = now;
+  if (playing)
+    $("phase").value = (+$("phase").value + Math.min(delta, 250) / 20000) % 1;
+  dirty = false;
+  try {
+    const gpu = $("backend").value === "GPU" && gl;
+    $("gpu").hidden = !gpu;
+    $("cpu").hidden = !!gpu;
+    const start = performance.now();
+    let label;
+    if (gpu) {
+      drawGPU(pose(+$("phase").value));
+      label = `GPU submit ${(performance.now() - start).toFixed(2)} ms (GPU 실행시간 아님)`;
+    } else {
+      const d = await request({
+        type: "frame",
+        pose: pose(+$("phase").value),
+        far: far(),
+      });
+      ctx.putImageData(new ImageData(d.pixels, 640, 480), 0, 0);
+      label = `CPU compute ${d.ms.toFixed(2)} ms`;
+    }
+    $("stats").textContent =
+      `${((points.length / 3) * side * side).toLocaleString()} points · ${side}×${side} instances · ${label}${playing && delta > 0 ? ` · displayed ${(1000 / delta).toFixed(1)} FPS` : ""}`;
+  } catch (e) {
+    $("stats").textContent = e.message;
+    playing = false;
+  } finally {
+    busy = false;
+  }
+}
+function log(text) {
+  $("log").textContent += text + "\n";
+  $("log").scrollTop = $("log").scrollHeight;
+  console.log(text);
+}
+async function benchmark() {
+  if (batching || !points) return;
+  batching = true;
+  playing = false;
+  stop = false;
+  $("play").textContent = "경로 재생";
+  while (busy) await sleep(10);
+  document
+    .querySelectorAll("#controls input,#controls select,#controls button")
+    .forEach((e) => (e.disabled = true));
+  $("bench").disabled = true;
+  $("stop").disabled = false;
+  $("save").disabled = true;
+  $("log").textContent = "";
+  rows = [];
+  const k = Math.max(1, Math.min(300, Math.floor(+$("k").value) || 30)),
+    phase = +$("phase").value;
+  const settings = {
+    model: $("model").value,
+    side,
+    points_per_model: points.length / 3,
+    path: $("path").value,
+    yaw: +$("yaw").value,
+    pitch: +$("pitch").value,
+    distance: +$("distance").value,
+    phase,
+    k,
+    device: $("device").textContent,
+  };
+  try {
+    log("Warm-up: 3 frames / backend (excluded)");
+    for (let i = 0; i < 3 && !stop; i++) {
+      await request({ type: "frame", pose: pose(phase), far: far() });
+      if (gl) await measuredGPU(pose(phase));
+    }
+    for (let i = 0; i < k && !stop; i++) {
+      const p = pose((phase + i / k) % 1);
+      let c,
+        g = null;
+      if (i % 2 && gl) {
+        g = await measuredGPU(p);
+        c = await request({ type: "frame", pose: p, far: far() });
+      } else {
+        c = await request({ type: "frame", pose: p, far: far() });
+        if (gl) g = await measuredGPU(p);
+      }
+      let validation = null;
+      if (i === 0 && g) {
+        let intersection = 0,
+          union = 0,
+          error = 0;
+        for (let y = 0; y < 480; y++)
+          for (let x = 0; x < 640; x++) {
+            const a = (y * 640 + x) * 4,
+              b = ((479 - y) * 640 + x) * 4;
+            const cm =
+                c.pixels[a] !== 245 ||
+                c.pixels[a + 1] !== 245 ||
+                c.pixels[a + 2] !== 245,
+              gm =
+                readback[b] !== 245 ||
+                readback[b + 1] !== 245 ||
+                readback[b + 2] !== 245;
+            if (cm || gm) union++;
+            if (cm && gm) {
+              intersection++;
+              error +=
+                Math.abs(c.pixels[a] - readback[b]) +
+                Math.abs(c.pixels[a + 1] - readback[b + 1]) +
+                Math.abs(c.pixels[a + 2] - readback[b + 2]);
+            }
+          }
+        validation = {
+          foreground_iou: union ? intersection / union : 1,
+          mean_rgb_error_on_overlap: intersection
+            ? error / (3 * intersection)
+            : 0,
+        };
+        log(
+          `First-frame image check: foreground IoU ${validation.foreground_iou.toFixed(5)}, RGB MAE ${validation.mean_rgb_error_on_overlap.toFixed(3)} / 255`,
+        );
+      }
+      rows.push({
+        frame: i + 1,
+        cpu_ms: c.ms,
+        gpu_wall_ms: g?.wall ?? null,
+        gpu_timer_ms: g?.timer ?? null,
+        pose: p,
+        validation,
+      });
+      log(
+        `[${i + 1}/${k}] CPU ${c.ms.toFixed(3)} ms | GPU wall ${g ? g.wall.toFixed(3) : "N/A"} ms | GPU timer ${g?.timer != null ? g.timer.toFixed(3) : "N/A"} ms`,
+      );
+      await sleep(0);
+    }
+    if (rows.length) {
+      for (const key of ["cpu_ms", "gpu_wall_ms", "gpu_timer_ms"]) {
+        const a = rows.map((r) => r[key]).filter((x) => x !== null);
+        if (a.length)
+          log(
+            `${key}: mean ${(a.reduce((x, y) => x + y, 0) / a.length).toFixed(3)} ms (${a.length} samples)`,
+          );
+      }
+      log(stop ? "Stopped. Partial results retained." : "Done.");
+    }
+    window.lastBenchmark = { settings, rows, stopped: stop };
+    $("save").disabled = !rows.length;
+  } catch (e) {
+    log("Error: " + e.message);
+  } finally {
+    batching = false;
+    document
+      .querySelectorAll("#controls input,#controls select,#controls button")
+      .forEach((e) => (e.disabled = false));
+    if (!gl) $("backend").querySelector("[value=GPU]").disabled = true;
+    $("bench").disabled = false;
+    $("stop").disabled = true;
+    dirty = true;
+  }
+}
+$("bench").onclick = benchmark;
+$("stop").onclick = () => {
+  stop = true;
+  log("Stopping after the current frame…");
+};
+$("save").onclick = () => {
+  const u = URL.createObjectURL(
+      new Blob([JSON.stringify(window.lastBenchmark, null, 2)], {
+        type: "application/json",
+      }),
+    ),
+    a = document.createElement("a");
+  a.href = u;
+  a.download = "browser-pointcloud-benchmark.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(u), 1000);
+};
+for (const id of ["model", "grid", "cap"]) $(id).onchange = load;
+for (const id of ["backend", "path", "yaw", "pitch", "distance", "phase"])
+  $(id).oninput = () => {
+    dirty = true;
+  };
+$("play").onclick = () => {
+  playing = !playing;
+  last = 0;
+  $("play").textContent = playing ? "일시 정지" : "경로 재생";
+};
+$("reset").onclick = () => {
+  for (const [id, v] of Object.entries({
+    yaw: 0,
+    pitch: 25,
+    distance: 1.2,
+    phase: 0,
+  }))
+    $(id).value = v;
+  dirty = true;
+};
+for (const canvas of [$("gpu"), $("cpu")]) {
+  let drag;
+  canvas.onpointerdown = (e) => {
+    if (batching) return;
+    drag = [e.clientX, e.clientY];
+    canvas.setPointerCapture(e.pointerId);
+  };
+  canvas.onpointerup = () => (drag = null);
+  canvas.onpointermove = (e) => {
+    if (!drag || batching) return;
+    $("yaw").value = +$("yaw").value + (e.clientX - drag[0]) * 0.4;
+    $("pitch").value = +$("pitch").value + (e.clientY - drag[1]) * 0.3;
+    drag = [e.clientX, e.clientY];
+    dirty = true;
+  };
+  canvas.onwheel = (e) => {
+    e.preventDefault();
+    if (batching) return;
+    $("distance").value = +$("distance").value + e.deltaY * 0.001;
+    dirty = true;
+  };
+}
+makeWorker();
+try {
+  initGPU();
+} catch (e) {
+  gl = null;
+  $("device").textContent = `GPU unavailable: ${e.message} · CPU mode`;
+  $("backend").value = "CPU";
+  $("backend").querySelector("[value=GPU]").disabled = true;
+}
+try {
+  const r = await fetch("data/models.json");
+  if (!r.ok) throw Error("Manifest download failed");
+  manifest = await r.json();
+  await load();
+  requestAnimationFrame(frame);
+} catch (e) {
+  $("stats").textContent = e.message;
+}
