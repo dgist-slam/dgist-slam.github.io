@@ -1,0 +1,54 @@
+{
+  "Bunny": {
+    "model": "Bunny",
+    "source": "https://graphics.stanford.edu/pub/3Dscanrep/bunny.tar.gz",
+    "original_points": 35947,
+    "points_per_instance": 35947,
+    "sample_seed": 616,
+    "sha256": "a5720bd96d158df403d153381b8411a727a1d73cff2f33dc9b212d6f75455b84",
+    "file": "bunny.bin",
+    "count": 35947,
+    "format": "little-endian float32 XYZ",
+    "sha256_points": "829e872db4393e4bb7d6eebdc2facbf991966374e282659d4982cb53ab51a7e5",
+    "spacing": 1.5
+  },
+  "Dragon": {
+    "model": "Dragon",
+    "source": "https://graphics.stanford.edu/pub/3Dscanrep/dragon/dragon_recon.tar.gz",
+    "original_points": 437645,
+    "points_per_instance": 100000,
+    "sample_seed": 616,
+    "sha256": "74ac1d90989c9b1732edee82d57e9ce71452144cf4355f108d8c9c616d28d02f",
+    "file": "dragon.bin",
+    "count": 100000,
+    "format": "little-endian float32 XYZ",
+    "sha256_points": "07886e388597896554d0f16ab9fbc8da653c758583e381b3b02f0f5063e792f0",
+    "spacing": 1.630977177619934
+  },
+  "Happy Buddha": {
+    "model": "Happy Buddha",
+    "source": "https://graphics.stanford.edu/pub/3Dscanrep/happy/happy_recon.tar.gz",
+    "original_points": 543652,
+    "points_per_instance": 100000,
+    "sample_seed": 616,
+    "sha256": "409cd294efbfd8244e15a382b95a9423f153b7776e736c9b09f19ec9d3c10ed0",
+    "file": "buddha.bin",
+    "count": 100000,
+    "format": "little-endian float32 XYZ",
+    "sha256_points": "d8a6213b4186917c30f526c3003be45178d064391d5b32a9184f49ba914d5817",
+    "spacing": 1.5
+  },
+  "Drill": {
+    "model": "Drill",
+    "source": "https://graphics.stanford.edu/pub/3Dscanrep/drill.tar.gz",
+    "original_points": 1961,
+    "points_per_instance": 1961,
+    "sample_seed": 616,
+    "sha256": "2da2acaba36903a9893c920c11506e1bd01c531bdf738d037bc505b313df5e1b",
+    "file": "drill.bin",
+    "count": 1961,
+    "format": "little-endian float32 XYZ",
+    "sha256_points": "9cb9a8c155e36380583ace889f2db5b62c97ccdddd2187981c0ae4a7f48fee11",
+    "spacing": 1.5
+  }
+}
