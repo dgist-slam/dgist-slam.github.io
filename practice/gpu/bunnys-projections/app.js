@@ -252,7 +252,7 @@ async function frame(now) {
       label = `CPU compute ${d.ms.toFixed(2)} ms`;
     }
     $("stats").textContent =
-      `${((points.length / 3) * side * side).toLocaleString()} points · ${side}×${side} instances · ${label}${playing && delta > 0 ? ` · displayed ${(1000 / delta).toFixed(1)} FPS` : ""}`;
+      `${((points.length / 3) * side * side).toLocaleString()} points · ${side}×${side} instances · ${label}${playing && delta > 0 ? ` · frame loop ${(1000 / delta).toFixed(1)} FPS` : ""}`;
   } catch (e) {
     $("stats").textContent = e.message;
     playing = false;

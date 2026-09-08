@@ -13,7 +13,7 @@ Run K frames to compare the same scene and camera poses. The log and browser con
 - **CPU ms:** worker projection, nearest camera-Z buffer and color conversion; excludes worker messaging and display.
 - **GPU wall ms:** uniform updates, clear, draw and synchronous 640×480 RGBA readback. The point buffer is already resident.
 - **GPU timer ms:** `EXT_disjoint_timer_query_webgl2` GPU command duration, when supported. Unavailable, disjoint or timed-out samples are null, never fabricated.
-- **Live GPU submit ms:** JavaScript command submission only, explicitly not GPU execution time. Live displayed FPS includes scheduling and browser presentation and is refresh-rate limited.
+- **Live GPU submit ms:** JavaScript command submission only, explicitly not GPU execution time. Live frame-loop FPS measures requestAnimationFrame callback intervals (including waiting for CPU work), not physical display scanout; it is normally refresh-rate limited.
 
 This compares JavaScript CPU rendering against the WebGL graphics pipeline, not Numba against CUDA. The native exercise is a separate implementation. CPU double arithmetic, GPU float arithmetic and rasterization/depth precision can differ at edge pixels. Both use 640×480, focal length 500, one-pixel points, camera-Z coloring and the same near/far cutoff. CPU work happens in a worker to keep controls responsive. Benchmark images are not sent to a server; standard GitHub Pages asset requests still occur.
 

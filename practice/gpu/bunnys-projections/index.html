@@ -146,8 +146,8 @@
       <p class="hint">
         CPU: worker 내 투영 + Z-buffer + 색 변환. GPU wall: draw + RGBA readback
         완료까지. GPU timer: 지원 시 GPU 명령 시간만. 네트워크·화면 갱신·worker
-        메시지 전송은 비교에서 제외됩니다. 실시간 FPS는 디스플레이 주사율에
-        제한됩니다.
+        메시지 전송은 비교에서 제외됩니다. Frame loop FPS는 브라우저 콜백 간격이며
+        실제 화면 스캔아웃 측정값이 아닙니다.
       </p>
     </section>
     <details>
