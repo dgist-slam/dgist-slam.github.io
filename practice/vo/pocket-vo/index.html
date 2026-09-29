@@ -8,7 +8,7 @@
     />
     <title>Pocket VO · 카메라와 움직임</title>
     <meta name="theme-color" content="#101820" />
-    <link rel="stylesheet" href="style.css?v=xlg1" />
+    <link rel="stylesheet" href="style.css?v=landscape1" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23101820'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%238df3c3' stroke-width='3'/%3E%3C/svg%3E"
@@ -16,30 +16,94 @@
   </head>
   <body>
     <main>
-      <header>
-        <div>
-          <span class="eyebrow">BROWSER MOTION LAB / 01</span>
-          <h1>Pocket VO<span>카메라로 보는 움직임</span></h1>
+      <section class="workspace" aria-label="카메라와 이동 경로">
+        <header>
+          <div>
+            <span class="eyebrow">BROWSER MOTION LAB / 01</span>
+            <h1>Pocket VO<span>카메라로 보는 움직임</span></h1>
+          </div>
+          <span id="mode" class="pill">대기</span>
+        </header>
+        <aside class="rotate-hint" aria-label="가로 화면 사용 안내">
+          <svg viewBox="0 0 64 64" width="56" height="56" aria-hidden="true">
+            <rect
+              x="10"
+              y="19"
+              width="44"
+              height="27"
+              rx="5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+            />
+            <path
+              d="M21 11a23 23 0 0 1 32 1m-1-8 2 9-9 1"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+              stroke-linecap="round"
+            />
+            <circle cx="47" cy="33" r="2" fill="currentColor" />
+          </svg>
+          <div>
+            <strong>시작 전에 휴대폰을 가로로 돌려주세요</strong>
+            <p>카메라와 이동 경로를 한 화면에서 넓게 볼 수 있어요.</p>
+            <small
+              >화면이 돌아가지 않으면 휴대폰의 자동 회전을 켜 주세요.</small
+            >
+          </div>
+        </aside>
+        <section class="controls" aria-label="실행 제어">
+          <button id="camera" title="일반 카메라 · 기본은 특징점 추적" disabled>
+            일반 카메라</button
+          ><button id="xr" disabled class="secondary">AR 카메라 · 자동 K</button
+          ><button id="demo" disabled class="secondary">합성 테스트</button
+          ><button id="stop" class="secondary" disabled>중지</button
+          ><button id="imu" class="secondary">IMU 연결</button>
+          <button id="fullscreen" class="secondary" hidden>전체 화면</button>
+        </section>
+        <p id="status" role="status">영상 처리 엔진과 학습 모델 준비 중…</p>
+        <div class="layout">
+          <section class="panel camera-panel">
+            <div class="panelhead">
+              <h2>카메라 · 특징점</h2>
+              <span id="resolution">384 px / WASM</span>
+            </div>
+            <div class="view">
+              <canvas id="view" width="384" height="288"></canvas>
+              <div id="empty">
+                카메라를 켜고<br /><strong>주변을 천천히 이동해 보세요.</strong
+                ><small>밝고 무늬가 있는 정적인 장면에서 시작하세요.</small>
+              </div>
+            </div>
+            <div class="stats">
+              <div><b id="fps">—</b><span>처리 Hz · 목표 10</span></div>
+              <div><b id="features">—</b><span>추적점</span></div>
+              <div><b id="inliers">—</b><span>기하 검증점</span></div>
+              <div><b id="ms">—</b><span>계산 ms</span></div>
+            </div>
+          </section>
+          <section class="panel map-panel">
+            <div class="panelhead">
+              <h2>이동 경로 · 위에서 보기</h2>
+              <button id="reset" class="textbutton">초기화</button>
+            </div>
+            <div class="mapstats">
+              <span id="trackingState">초기화</span
+              ><span>3D 점 <b id="mapped">0</b></span
+              ><span>재투영 오차 <b id="reprojection">—</b></span>
+            </div>
+            <canvas id="map" width="520" height="330"></canvas>
+          </section>
         </div>
-        <span id="mode" class="pill">대기</span>
-      </header>
-      <section class="controls">
-        <button id="camera" disabled>일반 카메라 · 특징점</button
-        ><button id="xr" disabled class="secondary">
-          Android AR 카메라 · 자동 K</button
-        ><button id="demo" disabled class="secondary">합성 영상 테스트</button
-        ><button id="stop" class="secondary" disabled>중지</button
-        ><button id="imu" class="secondary">IMU 연결</button>
       </section>
-      <p id="status" role="status">영상 처리 엔진과 학습 모델 준비 중…</p>
-      <p id="matcherState" class="caption" role="status">
-        XFeat + LighterGlue 준비 중 · 첫 접속 약 44 MB (엔진 포함)
+      <p class="detail-hint">
+        아래에서 추적 정보와 카메라·센서 설정을 확인할 수 있습니다.
       </p>
-      <section class="panel intrinsics">
-        <div class="panelhead">
-          <h2>카메라 내부 파라미터</h2>
-          <span id="kSource">수신 전</span>
-        </div>
+      <details class="panel intrinsics">
+        <summary>
+          카메라 내부 파라미터 <span id="kSource">수신 전</span>
+        </summary>
         <p id="xrSupport" class="caption">Android WebXR 지원 확인 중…</p>
         <p id="cameraInfo" class="caption">
           일반 카메라 API는 내부 행렬을 제공하지 않습니다.
@@ -49,54 +113,24 @@
           AR 모드는 같은 프레임의 카메라 영상과 투영 행렬에서 K를 계산합니다.
           ARCore의 위치를 VO 결과로 사용하지 않습니다.
         </p>
-      </section>
-      <div class="layout">
-        <section class="panel">
-          <div class="panelhead">
-            <h2>영상 · 특징점 추적</h2>
-            <span id="resolution">384 px / WASM</span>
-          </div>
-          <div class="view">
-            <canvas id="view" width="384" height="288"></canvas>
-            <div id="empty">
-              카메라를 켜고<br /><strong>주변을 천천히 이동해 보세요.</strong
-              ><small>밝고 무늬가 있는 정적인 장면에서 시작하세요.</small>
-            </div>
-          </div>
-          <div class="stats">
-            <div><b id="fps">—</b><span>처리 Hz · 목표 10</span></div>
-            <div><b id="features">—</b><span>추적점</span></div>
-            <div><b id="inliers">—</b><span>기하 검증점</span></div>
-            <div><b id="ms">—</b><span>계산 ms</span></div>
-          </div>
-        </section>
-        <section class="panel">
-          <div class="panelhead">
-            <h2>지도 기반 VO · 위에서 보기</h2>
-            <button id="reset" class="textbutton">초기화</button>
-          </div>
-          <div class="mapstats">
-            <span id="trackingState">초기화</span
-            ><span>3D 점 <b id="mapped">0</b></span
-            ><span>재투영 오차 <b id="reprojection">—</b></span>
-          </div>
-          <canvas id="map" width="520" height="330"></canvas>
-          <p class="caption">
-            X–Z 평면 · 같은 3D 점을 계속 관측해 이동량을 추정합니다.<br />단안
-            카메라이므로 스케일은 임의 단위이며 미터가 아닙니다.
-          </p>
-          <p id="trackingReason" class="caption" role="status"></p>
-          <p id="segmentNote" class="caption">
-            서로 다른 거리에 있는 물체를 보며 옆으로 천천히 이동해 3D 지도를
-            만드세요.
-          </p>
-        </section>
-      </div>
-      <section class="panel sensor">
-        <div class="panelhead">
-          <h2>휴대폰 IMU</h2>
-          <span id="imuState">연결 전</span>
-        </div>
+      </details>
+      <details class="panel diagnostics">
+        <summary>추적 상태 · 매처 정보</summary>
+        <p id="matcherState" class="caption" role="status">
+          XFeat + LighterGlue 준비 중 · 첫 접속 약 44 MB (엔진 포함)
+        </p>
+        <p class="caption">
+          X–Z 평면 · 같은 3D 점을 계속 관측해 이동량을 추정합니다.<br />단안
+          카메라이므로 스케일은 임의 단위이며 미터가 아닙니다.
+        </p>
+        <p id="trackingReason" class="caption" role="status"></p>
+        <p id="segmentNote" class="caption">
+          서로 다른 거리에 있는 물체를 보며 옆으로 천천히 이동해 3D 지도를
+          만드세요.
+        </p>
+      </details>
+      <details class="panel sensor">
+        <summary>휴대폰 IMU <span id="imuState">연결 전</span></summary>
         <div class="sensorgrid">
           <div>
             <span>가속도 · m/s²</span><b id="acc">— / — / —</b
@@ -115,7 +149,7 @@
           IMU는 관측만 합니다. 영상과 결합한 VIO나 가속도 적분 위치 추정은 아직
           하지 않습니다.
         </p>
-      </section>
+      </details>
       <details class="panel">
         <summary>실험 조건과 설정</summary>
         <label
@@ -157,6 +191,6 @@
     <video id="video" muted playsinline hidden></video>
     <script src="geometry.js?v=xlg1"></script>
     <script src="xr-camera.js?v=xlg1"></script>
-    <script src="app.js?v=xlg1"></script>
+    <script src="app.js?v=landscape1"></script>
   </body>
 </html>

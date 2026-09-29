@@ -111,6 +111,7 @@ function stop() {
   if (oldXR) oldXR.stop();
   xrPending = false;
   document.body.classList.remove("xr-active");
+  $("fullscreen").disabled = false;
   $("xr").disabled = !ready || !xrSupported;
   running = false;
   cancelAnimationFrame(frameHandle);
@@ -524,6 +525,7 @@ async function startXR() {
     lastXRSize = "";
     prepare("xr");
     document.body.classList.add("xr-active");
+    $("fullscreen").disabled = true;
     $("status").textContent = "AR 카메라와 내부 파라미터 수신 대기";
   } catch (e) {
     if (token === generation) {
@@ -551,3 +553,30 @@ $("xr").onclick = startXR;
     $("xrSupport").textContent = "AR 지원을 확인하지 못했습니다: " + e.message;
   }
 })();
+
+// Fullscreen is an explicit user action; the physical rotation hint works
+// without orientation-lock APIs, including browsers that lack fullscreen.
+const fullscreenButton = $("fullscreen");
+fullscreenButton.hidden =
+  !document.fullscreenEnabled || !document.documentElement.requestFullscreen;
+fullscreenButton.onclick = async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else
+      await document.documentElement.requestFullscreen({
+        navigationUI: "hide",
+      });
+  } catch {
+    $("status").textContent =
+      "전체 화면을 열 수 없습니다. 휴대폰을 가로로 돌려 사용하세요.";
+  }
+};
+document.addEventListener("fullscreenchange", () => {
+  fullscreenButton.textContent = document.fullscreenElement
+    ? "전체 화면 해제"
+    : "전체 화면";
+  fullscreenButton.setAttribute(
+    "aria-pressed",
+    String(!!document.fullscreenElement),
+  );
+});
