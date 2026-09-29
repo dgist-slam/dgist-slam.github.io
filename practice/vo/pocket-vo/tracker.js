@@ -42,7 +42,10 @@
     return X;
   }
   class Tracker {
-    constructor(cv) {
+    constructor(cv, { processHz = 30 } = {}) {
+      // Preserve approximate wall-time cadence at different image sampling rates.
+      this.cadence = (framesAt30Hz) =>
+        Math.max(1, Math.ceil((framesAt30Hz * processHz) / 30));
       this.cv = cv;
       this.segment = 0;
       this.reset();
@@ -596,7 +599,7 @@
         if (seeded.length < 45) {
           this.features = [];
           this.detect(gray, k);
-        } else if (this.frame % 4 === 0) {
+        } else if (this.frame % this.cadence(4) === 0) {
           let init = this.bootstrap(k);
           if (init) {
             this.saveKey(gray, k);
@@ -656,7 +659,7 @@
           this.features = this.features.filter((f) => !f.X || valid.has(f));
           let added = 0;
           for (let f of this.features) {
-            if (!f.X && f.k && f.age >= 4 && added < 25) {
+            if (!f.X && f.k && f.age >= this.cadence(4) && added < 25) {
               const X = triangulate(
                 f.base,
                 f.k,
@@ -676,10 +679,12 @@
               }
             }
           }
-          this.features = this.features.filter((f) => f.X || f.age < 100);
-          if (this.features.length < 230 || this.frame % 8 === 0)
+          this.features = this.features.filter(
+            (f) => f.X || f.age < this.cadence(100),
+          );
+          if (this.features.length < 230 || this.frame % this.cadence(8) === 0)
             this.detect(gray, k);
-          if (this.frame % 12 === 0 && solved.inliers > 35)
+          if (this.frame % this.cadence(12) === 0 && solved.inliers > 35)
             this.saveKey(gray, k);
           Object.assign(result, {
             phase: "tracking",

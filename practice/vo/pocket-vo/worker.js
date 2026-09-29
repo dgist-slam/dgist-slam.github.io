@@ -1,8 +1,8 @@
-importScripts("geometry.js?v=mapvo2", "tracker.js?v=mapvo2", "vendor/opencv.js");
+importScripts("geometry.js?v=hz10", "tracker.js?v=hz10", "vendor/opencv.js");
 let api, tracker;
 cv.then((c) => {
   api = c;
-  tracker = new PocketTracker.Tracker(c);
+  tracker = new PocketTracker.Tracker(c, { processHz: 10 });
   postMessage({ type: "ready" });
 });
 onmessage = ({ data: d }) => {

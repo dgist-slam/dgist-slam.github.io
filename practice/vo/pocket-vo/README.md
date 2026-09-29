@@ -13,9 +13,11 @@
 
 위에서 본 경로는 같은 지도 내에서 일관된 **임의 스케일**을 사용합니다. 미터 단위가 아닙니다. 중지하면 카메라·센서를 해제하고 마지막 궤적을 유지합니다. 다시 시작하거나 초기화하면 새 지도를 만듭니다.
 
+영상 추출·XR GPU readback·VO 계산을 10Hz로 제한합니다. 처리 중에는 새 작업을 쌓지 않고 최신 영상을 사용합니다. 일반 카메라 입력은 최대 30Hz, XR 화면과 IMU는 자체 주기를 유지합니다. 화면의 처리 Hz는 실제 결과 수신 속도입니다.
+
 ## 알고리즘
 
-1. 처리 너비 384px, Web Worker의 OpenCV.js / WASM CPU. 최대 300개 특징점을 격자별로 분산 검출.
+1. VO 목표 10Hz (100ms 간격), 처리 너비 384px, Web Worker의 OpenCV.js / WASM CPU. 최대 300개 특징점을 격자별로 분산 검출.
 2. 피라미드 Lucas–Kanade + 양방향 오차 + 패치 오차로 추적점 검사.
 3. 회전 전용 모델 및 homography 퇴화를 검사한 뒤 두 영상으로 bootstrap. Essential matrix, cheirality, parallax, 양쪽 재투영 오차, 공간 분포 검사.
 4. 초기 삼각측량한 3D 점의 중앙 깊이를 1로 정규화하고 같은 스케일의 지도를 유지.
@@ -30,7 +32,7 @@ WebXR는 카메라 영상을 제공하기 위해 자체 추적을 수행하지�
 
 ## 재현 검사
 
-Node.js에서 `node tests/regression.cjs` 및 `node tests/recovery.cjs` 실행. 추가 패키지 설치 없이 포함된 OpenCV 런타임으로 6개 합성 영상 시나리오(이동/정지/회전/짧은 가림/추적 후 회전/긴 추적 손실)를 검사합니다. 결과와 실제 영상 오검출 검사는 VALIDATION.md에 있습니다. 성능 수치는 데스크톱 검증으로, 휴대폰 성능 보장이 아닙니다.
+Node.js에서 `node tests/regression.cjs` 및 `VO_TEST_HZ=10 node tests/regression.cjs`, `node tests/recovery.cjs` 실행. 추가 패키지 설치 없이 포함된 OpenCV 런타임으로 6개 합성 영상 시나리오(이동/정지/회전/짧은 가림/추적 후 회전/긴 추적 손실)를 검사합니다. 결과와 실제 영상 오검출 검사는 VALIDATION.md에 있습니다. 성능 수치는 데스크톱 검증으로, 휴대폰 성능 보장이 아닙니다.
 
 ## 로컬 실행
 

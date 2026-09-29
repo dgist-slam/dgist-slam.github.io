@@ -6,7 +6,9 @@ const $ = (id) => document.getElementById(id),
   ic = input.getContext("2d", { willReadFrequently: true }),
   map = $("map"),
   mc = map.getContext("2d");
-let worker = new Worker("worker.js?v=mapvo2"),
+const PROCESS_HZ = 10,
+  FRAME_INTERVAL = 1000 / PROCESS_HZ;
+let worker = new Worker("worker.js?v=hz10"),
   ready = false,
   running = false,
   busy = false,
@@ -14,7 +16,7 @@ let worker = new Worker("worker.js?v=mapvo2"),
   mode = "",
   generation = 0,
   frameHandle = 0,
-  lastFrame = 0,
+  nextFrameAt = 0,
   lastMedia = -1,
   lastResult = 0,
   frameCount = 0,
@@ -137,7 +139,7 @@ function prepare(name) {
   reset();
   mode = name;
   running = true;
-  lastFrame = lastResult = 0;
+  nextFrameAt = lastResult = 0;
   demoFrame = frameCount = 0;
   $("empty").style.display = "none";
   $("stop").disabled = false;
@@ -207,7 +209,7 @@ function demo() {
 }
 function renderDemo() {
   let f = 384 / (2 * Math.tan((65 * Math.PI) / 360)),
-    t = demoFrame++ / 30,
+    t = demoFrame++ / PROCESS_HZ,
     cx = 1.5 * Math.sin(t * 0.22),
     cz = 0.4 * Math.sin(t * 0.15);
   ic.fillStyle = "#18232d";
@@ -229,12 +231,13 @@ function loop(now) {
   frameHandle = requestAnimationFrame(loop);
   if (
     busy ||
-    now - lastFrame < 33 ||
+    now < nextFrameAt ||
     (mode === "camera" &&
       (video.readyState < 2 || video.currentTime === lastMedia))
   )
     return;
-  lastFrame = now;
+  // Keep a 10 Hz schedule without queuing missed frames.
+  nextFrameAt = now + FRAME_INTERVAL - ((now - nextFrameAt) % FRAME_INTERVAL);
   if (mode === "demo") renderDemo();
   else {
     const h = Math.round((384 * video.videoHeight) / video.videoWidth);
@@ -345,6 +348,8 @@ worker.onmessage = (e) => {
   window.voDiagnostics = {
     mode,
     frames: frameCount,
+    targetHz: PROCESS_HZ,
+    processedHz: fpsAverage,
     keyframes,
     tracks: d.tracks.length,
     mapped: d.mapPoints,
@@ -473,6 +478,7 @@ async function startXR() {
   $("stop").disabled = false;
   $("status").textContent = "Android AR / 카메라 권한 요청 중…";
   const source = new PocketXRCamera.XRCameraSource({
+    processHz: PROCESS_HZ,
     canProcess: () => running && mode === "xr" && !busy,
     onStatus: (message) => {
       if (source === xrSource) $("status").textContent = message;
