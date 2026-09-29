@@ -1,39 +1,43 @@
-# Pocket VO
+# Pocket VO — sparse map tracker
 
-휴대폰 카메라로 특징점을 추적하고 두 영상 간 상대 자세를 추정하는 실험용 웹 앱입니다.
+휴대폰 카메라 영상에서 3D 특징점을 유지하며 연속 자세를 추정하는 실험용 단안 VO입니다. 로그인 없이 정적 HTTPS 페이지에서 실행됩니다.
 
-## 실행
+## 사용
 
-이 폴더를 정적 웹 서버로 제공하세요. 개발 PC에서는 `python3 -m http.server 8765` 후 http://localhost:8765 에서 엽니다. 휴대폰 카메라·IMU에는 **HTTPS 배포**가 필요합니다. PC의 LAN HTTP 주소나 HTML 파일 더블클릭으로는 제대로 동작하지 않습니다.
+- **Android AR 카메라 · 자동 K**: 지원되는 Android Chrome/ARCore에서 같은 XRView의 영상과 투영 행렬로 내부 파라미터를 얻습니다. Raw Camera Access / DOM overlay 및 사용자 권한이 필요합니다.
+- **일반 카메라 · 특징점**: getUserMedia는 K를 제공하지 않으므로 기본적으로 특징점만 추적합니다. 실험 설정에서 추정 K 사용을 명시적으로 허용할 수 있지만 실제 보정값이 아닙니다.
+- **합성 영상 테스트**: 실제 영상 추적·3D 초기화·PnP 경로를 실행합니다. 정답 궤적을 결과로 복사하지 않습니다.
+- **IMU 연결**: 가속도·각속도·실측 수신 Hz 관측. VO에는 융합하지 않습니다.
 
-- **카메라 시작**: 후면 카메라를 우선 요청, 처리 너비 384px, 최대 목표 30Hz (실측 성능은 기기에 따름).
-- **합성 영상 테스트**: 깊이가 다른 3D 점을 렌더링하고 실제 영상 처리 경로로 추적. 정답 경로를 궤적으로 복사하지 않음.
-- **IMU 연결**: 사용자 클릭 시 iOS 권한 요청, 가속도/각속도/중력 포함 가속도와 관측 수신 주기 표시. 일부 기기에서는 null 또는 이벤트 미제공.
-- 중지/탭 숨김 시 카메라 트랙, 센서 리스너 해제.
+초기화하려면 가까운 물체와 먼 배경을 함께 보며 옆으로 천천히 이동하세요. 무늬 없는 벽, 단일 평면, 제자리 회전처럼 깊이를 안정적으로 얻기 어려운 경우 초기화를 보류합니다. 초록 점은 지도에 등록된 점, 주황 점은 깊이 초기화를 기다리는 후보입니다.
 
-## 구현 및 한계
+위에서 본 경로는 같은 지도 내에서 일관된 **임의 스케일**을 사용합니다. 미터 단위가 아닙니다. 중지하면 카메라·센서를 해제하고 마지막 궤적을 유지합니다. 다시 시작하거나 초기화하면 새 지도를 만듭니다.
 
-OpenCV.js 4.10.0, WASM CPU, Web Worker. WebGL/WebGPU 가속이 아님. Shi–Tomasi 220점, 피라미드 LK 양방향 검사, normalized eight-point RANSAC, essential decomposition, cheirality 및 parallax 검사. 일반 getUserMedia는 K를 제공하지 않아 기본적으로 특징점 추적만 합니다. 사용자가 시야각 추정 K 사용을 명시적으로 켠 경우에만 기존 FOV 근사를 사용합니다. Android WebXR Raw Camera Access 경로는 동일 XRView의 투영 행렬과 카메라 영상을 함께 사용합니다. 별도 렌즈 왜곡 계수는 제공되지 않습니다.
+## 알고리즘
 
-이것은 **두 영상 기반 VO 프로토타입**이며 완전한 SLAM/VIO가 아닙니다. Translation direction을 키프레임마다 단위 길이로 누적하므로 전역 metric scale뿐 아니라 구간 간 상대 이동 크기도 복원하지 못합니다. 표시 경로는 이동 방향 진단용입니다. BA, 재지역화, 루프 폐쇄, persistent 3D map 없음. 정지/순수 회전/평면/움직이는 물체에서 퇴화 및 오검출 가능. 검증 실패 시 위치 갱신 보류. 추적 손실 후 기준 프레임 재설정 구간은 위치 연속성이 보장되지 않습니다.
+1. 처리 너비 384px, Web Worker의 OpenCV.js / WASM CPU. 최대 300개 특징점을 격자별로 분산 검출.
+2. 피라미드 Lucas–Kanade + 양방향 오차 + 패치 오차로 추적점 검사.
+3. 회전 전용 모델 및 homography 퇴화를 검사한 뒤 두 영상으로 bootstrap. Essential matrix, cheirality, parallax, 양쪽 재투영 오차, 공간 분포 검사.
+4. 초기 삼각측량한 3D 점의 중앙 깊이를 1로 정규화하고 같은 스케일의 지도를 유지.
+5. 매 프레임 3D–2D PnP RANSAC + inlier 기반 반복 최적화. 재투영 오차·양의 깊이·화면 분포·과도한 자세 변화를 검사.
+6. 기존 3D 점을 계속 사용하면서 새 후보를 검출하고 다중 시점에서 삼각측량해 보충.
+7. 일시적 추적 실패 시 위치를 유지하고 마지막 정상 기준 영상에서 복구. 24개 처리 프레임 동안 복구하지 못하면 새 구간을 시작하고 이전 구간과 연결하지 않음.
 
-IMU는 **표시만** 하며 영상 자세에 융합하지 않습니다. 브라우저 event timestamp와 카메라 노출 시각의 정밀 동기화 및 extrinsic calibration을 확보하지 않았습니다.
+이전 버전의 키프레임마다 단위 이동을 더하는 방식을 제거했습니다. 전체 landmark BA, 루프 폐쇄, 전역 재지역화, IMU 융합, 미터 단위 스케일은 포함하지 않습니다. 동적 물체·반복 무늬·롤링 셔터·자동 초점·카메라 보정 오차에 여전히 취약할 수 있습니다.
 
-영상·IMU는 서버로 전송하지 않습니다. OpenCV 런타임은 이 폴더에 포함되어 있습니다 (약 10MB). 배포 시 vendor 폴더 포함 필요.
+WebXR는 카메라 영상을 제공하기 위해 자체 추적을 수행하지만, **ARCore/WebXR 위치를 이 VO의 결과로 사용하지 않습니다.** 영상과 K만 사용합니다. GPU는 XR 텍스처 축소·readback에 사용하며 VO 자체는 WASM CPU입니다. 렌즈 왜곡 계수는 이 API로 별도로 얻지 못합니다.
 
-## 라이선스
+## 재현 검사
 
-OpenCV: Apache-2.0. 배포본 출처: https://www.npmjs.com/package/@techstark/opencv-js (4.10.0-release.1), https://github.com/opencv/opencv . vendor/LICENSE-OpenCV.txt 참고.
+Node.js에서 `node tests/regression.cjs` 실행. 추가 패키지 설치 없이 포함된 OpenCV 런타임으로 6개 합성 영상 시나리오(이동/정지/회전/짧은 가림/추적 후 회전/긴 추적 손실)를 검사합니다. 결과와 실제 영상 오검출 검사는 VALIDATION.md에 있습니다. 성능 수치는 데스크톱 검증으로, 휴대폰 성능 보장이 아닙니다.
 
-## Android 자동 내부 파라미터
+## 로컬 실행
 
-`Android AR 카메라 · 자동 K`는 `immersive-ar`, `camera-access`, `dom-overlay`를 요청합니다. Android Chrome / ARCore 및 기능 지원 기기가 필요합니다. `isSessionSupported`와 API 존재 여부를 먼저 확인하되 실제 Raw Camera 권한/기능 여부는 세션 생성 시 검증합니다. 자동으로 일반 카메라나 추정 K로 대체하지 않습니다.
+이 폴더에서 `python3 -m http.server 8765` 후 http://localhost:8765 에서 엽니다. 휴대폰 카메라·IMU에는 HTTPS 배포가 필요합니다. LAN HTTP나 HTML 더블클릭 실행은 지원하지 않습니다. 영상·센서 데이터는 외부로 전송하지 않습니다. OpenCV 약 10MB를 포함한 vendor 폴더도 배포해야 합니다.
 
-매 프레임 `XRView.camera`의 영상 텍스처와 `XRView.projectionMatrix`를 읽습니다. 다른 getUserMedia 영상에 XR 내부 행렬을 적용하지 않습니다. WebGL에서 384px로 축소한 후 위쪽 행 우선의 CPU 영상으로 읽어 worker에 전달합니다. OpenGL에서 CV 좌표(x 오른쪽, y 아래, z 전방)로 변환하며, 주점의 반 픽셀 및 skew 부호를 반영합니다. 키프레임과 현재 프레임의 K를 각각 저장해 정규화합니다. 영상 크기가 바뀌면 추적을 재설정합니다.
+## 출처와 라이선스
 
-XR 런타임의 추적은 카메라 영상을 얻기 위해 동작하지만 **WebXR/ARCore 위치를 자체 VO 궤적으로 사용하지 않습니다.** VO 연산은 여전히 WASM CPU입니다. AR 세션+GPU readback 비용으로 일반 카메라 모드보다 느릴 수 있습니다.
-
-공식 근거:
-- https://github.com/immersive-web/raw-camera-access/blob/main/explainer.md
-- https://developer.android.com/reference/android/hardware/camera2/CameraCharacteristics#LENS_INTRINSIC_CALIBRATION
-- https://developers.google.com/ar/reference/java/com/google/ar/core/CameraIntrinsics
+- OpenCV.js 4.10.0: Apache-2.0, vendor/LICENSE-OpenCV.txt. 배포본 @techstark/opencv-js 4.10.0-release.1.
+- PnP: https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
+- WebXR camera/K: https://github.com/immersive-web/raw-camera-access/blob/main/explainer.md
+- Android native Camera2: https://developer.android.com/reference/android/hardware/camera2/CameraCharacteristics#LENS_INTRINSIC_CALIBRATION
