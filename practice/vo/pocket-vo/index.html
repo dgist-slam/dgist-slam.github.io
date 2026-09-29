@@ -8,7 +8,7 @@
     />
     <title>Pocket VO · 카메라와 움직임</title>
     <meta name="theme-color" content="#101820" />
-    <link rel="stylesheet" href="style.css?v=mapvo1" />
+    <link rel="stylesheet" href="style.css?v=mapvo2" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23101820'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%238df3c3' stroke-width='3'/%3E%3C/svg%3E"
@@ -82,6 +82,7 @@
             X–Z 평면 · 같은 3D 점을 계속 관측해 이동량을 추정합니다.<br />단안
             카메라이므로 스케일은 임의 단위이며 미터가 아닙니다.
           </p>
+          <p id="trackingReason" class="caption" role="status"></p>
           <p id="segmentNote" class="caption">
             서로 다른 거리에 있는 물체를 보며 옆으로 천천히 이동해 3D 지도를
             만드세요.
@@ -134,10 +135,11 @@
         <p>
           격자별 Shi–Tomasi → 양방향 Lucas–Kanade → 두 영상으로 3D 점 초기화 →
           PnP RANSAC + 재투영 최적화. 지도 점을 유지하고 보충하며, 추적 실패 시
-          기준 영상에서 복구를 시도합니다. 이번 버전은 Web Worker의 CPU/WASM
-          구현이며 GPU 가속은 아닙니다. 루프 폐쇄·번들 조정·IMU 융합·미터 단위
-          스케일은 포함하지 않습니다. 초록 점은 지도에 등록된 3D 점, 주황 점은
-          깊이 초기화를 기다리는 후보입니다.
+          최대 6개의 기준 영상에서 복구를 시도하며 지도를 자동으로 버리지
+          않습니다. 이번 버전은 Web Worker의 CPU/WASM 구현이며 GPU 가속은
+          아닙니다. 루프 폐쇄·번들 조정·IMU 융합·미터 단위 스케일은 포함하지
+          않습니다. 초록 점은 지도에 등록된 3D 점, 주황 점은 깊이 초기화를
+          기다리는 후보입니다.
         </p>
         <p>
           카메라·IMU는 HTTPS 또는 localhost에서 사용하세요. iPhone에서는 버튼을
@@ -148,8 +150,8 @@
       <footer>POCKET VO / EXPERIMENTAL · 카메라 위치 추정의 첫 단계</footer>
     </main>
     <video id="video" muted playsinline hidden></video>
-    <script src="geometry.js?v=mapvo1"></script>
+    <script src="geometry.js?v=mapvo2"></script>
     <script src="xr-camera.js"></script>
-    <script src="app.js?v=mapvo1"></script>
+    <script src="app.js?v=mapvo2"></script>
   </body>
 </html>

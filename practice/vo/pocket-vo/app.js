@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id),
   ic = input.getContext("2d", { willReadFrequently: true }),
   map = $("map"),
   mc = map.getContext("2d");
-let worker = new Worker("worker.js?v=mapvo1"),
+let worker = new Worker("worker.js?v=mapvo2"),
   ready = false,
   running = false,
   busy = false,
@@ -98,6 +98,7 @@ function reset() {
   keyframes = 0;
   drawMap();
   $("inliers").textContent = "—";
+  $("trackingReason").textContent = "";
   $("segmentNote").textContent =
     "처음에 옆으로 천천히 이동해 3D 지도를 만드세요.";
 }
@@ -299,11 +300,19 @@ worker.onmessage = (e) => {
     d.phase === "tracking"
       ? "추적 중"
       : d.phase === "lost"
-        ? "복구 중"
+        ? d.failedFrames < 3
+          ? "검증 대기"
+          : "복구 중"
         : d.phase === "uncalibrated"
           ? "K 필요"
           : "초기화";
   $("trackingState").dataset.phase = d.phase;
+  $("trackingReason").textContent =
+    d.phase === "lost"
+      ? `${d.reason || "추적 불확실"} · 기준 영상 ${d.referenceFrames}개 / 지도점 ${d.retainedPoints}개 보존. 이전에 보던 장면으로 돌아가면 복구를 시도합니다.`
+      : d.referenceFrames
+        ? `복구용 기준 영상 ${d.referenceFrames}개 저장`
+        : "";
   ctx.lineWidth = 1;
   for (let [x, y, u, v, mapped] of d.tracks) {
     ctx.strokeStyle = mapped ? "#8df3c388" : "#efb56e66";
@@ -317,7 +326,7 @@ worker.onmessage = (e) => {
   if (activeSegment !== d.segment) {
     if (activeSegment !== null)
       $("segmentNote").textContent =
-        "추적을 잃어 새 구간을 시작했습니다. 이전 구간과 스케일·좌표가 연결되지 않습니다.";
+        "영상 크기 또는 입력이 바뀌어 새 구간을 시작했습니다. 이전 구간과 스케일·좌표가 연결되지 않습니다.";
     activeSegment = d.segment;
     path = [[0, 0, 0]];
     position = [0, 0, 0];
@@ -344,6 +353,10 @@ worker.onmessage = (e) => {
     phase: d.phase,
     segment: d.segment,
     recoveries: d.recoveries,
+    reason: d.reason,
+    references: d.referenceFrames,
+    retained: d.retainedPoints,
+    failedFrames: d.failedFrames,
     ms: d.ms,
     position: position.slice(),
     pathLength: path.length,

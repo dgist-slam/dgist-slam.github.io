@@ -49,9 +49,15 @@
     }
     reset() {
       this.prev?.delete();
-      this.key?.gray.delete();
+      for (const key of this.keys || []) {
+        key.gray.delete();
+        key.orb.keypoints.delete();
+        key.orb.descriptors.delete();
+      }
       this.prev = null;
-      this.key = null;
+      this.keys = [];
+      this.recoveryCursor = 0;
+      this.failureReason = "";
       this.features = [];
       this.R = I();
       this.t = [0, 0, 0];
@@ -64,19 +70,6 @@
       this.h = 0;
       this.initAttempt = 0;
       this.recoveries = 0;
-    }
-    restart(gray, k) {
-      this.prev?.delete();
-      this.key?.gray.delete();
-      this.prev = null;
-      this.key = null;
-      this.features = [];
-      this.R = I();
-      this.t = [0, 0, 0];
-      this.initialized = false;
-      this.failures = 0;
-      this.segment++;
-      this.detect(gray, k);
     }
     detect(gray, k) {
       const cv = this.cv,
@@ -134,7 +127,7 @@
         corners.delete();
       }
     }
-    flow(previous, current, features) {
+    flow(previous, current, features, guesses = null) {
       if (!features.length) return [];
       const cv = this.cv,
         mats = [];
@@ -151,10 +144,23 @@
               features.flatMap((f) => f.p),
             ),
           ),
-          q = mat(new cv.Mat()),
+          q = mat(
+            guesses
+              ? cv.matFromArray(features.length, 1, cv.CV_32FC2, guesses.flat())
+              : new cv.Mat(),
+          ),
           ok = mat(new cv.Mat()),
           err = mat(new cv.Mat()),
-          back = mat(new cv.Mat()),
+          back = mat(
+            guesses
+              ? cv.matFromArray(
+                  features.length,
+                  1,
+                  cv.CV_32FC2,
+                  features.flatMap((f) => f.p),
+                )
+              : new cv.Mat(),
+          ),
           bok = mat(new cv.Mat()),
           be = mat(new cv.Mat()),
           size = new cv.Size(21, 21),
@@ -173,6 +179,7 @@
           size,
           3,
           crit,
+          guesses ? cv.OPTFLOW_USE_INITIAL_FLOW : 0,
         );
         cv.calcOpticalFlowPyrLK(
           current,
@@ -184,6 +191,7 @@
           size,
           3,
           crit,
+          guesses ? cv.OPTFLOW_USE_INITIAL_FLOW : 0,
         );
         let result = [];
         for (let i = 0; i < features.length; i++) {
@@ -289,9 +297,15 @@
       this.features = landmarks.map((l) => l.f);
       return { inliers: this.features.length, error: 0, initialized: true };
     }
-    pnp(features, k) {
+    pnp(features, k, recovering = false) {
+      const reject = (reason) => {
+        this.failureReason = reason;
+        return null;
+      };
       let mapped = features.filter((f) => f.X);
-      if (mapped.length < 15 || this.coverage(mapped) < 4) return null;
+      if (mapped.length < 15)
+        return reject(`추적 가능한 3D 점 부족 (${mapped.length}/15)`);
+      if (this.coverage(mapped) < 4) return reject("3D 점이 화면 한쪽에 몰림");
       const cv = this.cv,
         mats = [],
         keep = (m) => {
@@ -337,7 +351,7 @@
             cv.SOLVEPNP_EPNP,
           );
         if (!ok || inliers.rows < 15 || inliers.rows < mapped.length * 0.5)
-          return null;
+          return reject(`기하 검증점 부족 (${inliers.rows}/${mapped.length})`);
         let ids = Array.from(inliers.data32S),
           a = keep(
             cv.matFromArray(
@@ -356,7 +370,7 @@
             ),
           );
         if (!cv.solvePnP(a, b, K, D, rv, tv, true, cv.SOLVEPNP_ITERATIVE))
-          return null;
+          return reject("자세 최적화 실패");
         cv.Rodrigues(rv, RM);
         let R = Array.from({ length: 3 }, (_, i) =>
             Array.from(RM.data64F.slice(i * 3, i * 3 + 3)),
@@ -364,7 +378,8 @@
           t = Array.from(tv.data64F),
           valid = [],
           errors = [];
-        if (!R.flat().concat(t).every(Number.isFinite)) return null;
+        if (!R.flat().concat(t).every(Number.isFinite))
+          return reject("자세 최적화 실패");
         for (let item of mapped) {
           let q = project(item.X, R, t, k),
             err = q ? norm(sub(q, item.p)) : Infinity;
@@ -379,7 +394,9 @@
           this.coverage(valid) < 4 ||
           med(errors) > 1.1
         )
-          return null;
+          return reject(
+            `재투영 검증 실패 (${valid.length}/${mapped.length}, ${med(errors).toFixed(2)} px)`,
+          );
         const delta = mul(R, tr(this.R)),
           angle = Math.acos(
             Math.max(
@@ -389,21 +406,163 @@
           ),
           depth = med(valid.map((f) => add(mv(this.R, f.X), this.t)[2])),
           distance = norm(sub(center(R, t), center(this.R, this.t)));
-        if (angle > 0.5 || distance > Math.max(0.08, depth * 0.2)) return null;
+        if (
+          recovering &&
+          (valid.length < 25 || valid.length < mapped.length * 0.65)
+        )
+          return reject("기준 영상과 일치하는 점 부족");
+        const maxAngle = recovering ? 1.0 : 0.5;
+        const maxDistance = Math.max(
+          recovering ? 0.2 : 0.08,
+          depth * (recovering ? 0.5 : 0.2),
+        );
+        if (angle > maxAngle || distance > maxDistance)
+          return reject("이동량이 커서 자세 검증 보류");
         return { R, t, valid, error: med(errors), inliers: valid.length };
       } finally {
         mats.forEach((m) => m.delete());
       }
     }
+    describe(gray) {
+      const cv = this.cv,
+        orb = new cv.ORB(),
+        mask = new cv.Mat(),
+        keypoints = new cv.KeyPointVector(),
+        descriptors = new cv.Mat();
+      try {
+        orb.detectAndCompute(gray, mask, keypoints, descriptors);
+        return { keypoints, descriptors };
+      } catch (e) {
+        keypoints.delete();
+        descriptors.delete();
+        throw e;
+      } finally {
+        orb.delete();
+        mask.delete();
+      }
+    }
+    guidedRecovery(key, gray) {
+      const cv = this.cv,
+        current = this.describe(gray),
+        matches = new cv.DMatchVectorVector(),
+        matcher = new cv.BFMatcher(cv.NORM_HAMMING, false),
+        mats = [];
+      try {
+        if (key.orb.descriptors.rows < 12 || current.descriptors.rows < 12)
+          return [];
+        matcher.knnMatch(key.orb.descriptors, current.descriptors, matches, 2);
+        const pairs = [],
+          used = new Set();
+        for (let i = 0; i < matches.size(); i++) {
+          const m = matches.get(i);
+          try {
+            if (m.size() < 2) continue;
+            const a = m.get(0),
+              b = m.get(1);
+            if (
+              a.distance < 60 &&
+              a.distance < 0.72 * b.distance &&
+              !used.has(a.trainIdx)
+            ) {
+              used.add(a.trainIdx);
+              pairs.push([
+                key.orb.keypoints.get(a.queryIdx).pt,
+                current.keypoints.get(a.trainIdx).pt,
+              ]);
+            }
+          } finally {
+            m.delete();
+          }
+        }
+        if (pairs.length < 12) return [];
+        const A = cv.matFromArray(
+            pairs.length,
+            1,
+            cv.CV_32FC2,
+            pairs.flatMap((p) => [p[0].x, p[0].y]),
+          ),
+          B = cv.matFromArray(
+            pairs.length,
+            1,
+            cv.CV_32FC2,
+            pairs.flatMap((p) => [p[1].x, p[1].y]),
+          ),
+          mask = new cv.Mat();
+        mats.push(A, B, mask);
+        const H = cv.findHomography(A, B, cv.RANSAC, 3, mask, 500, 0.995);
+        mats.push(H);
+        if (H.rows !== 3 || Array.from(mask.data).filter(Boolean).length < 10)
+          return [];
+        const h = H.data64F,
+          features = [],
+          guesses = [];
+        for (const f of key.features) {
+          const [x, y] = f.p,
+            z = h[6] * x + h[7] * y + h[8],
+            u = (h[0] * x + h[1] * y + h[2]) / z,
+            v = (h[3] * x + h[4] * y + h[5]) / z;
+          if (
+            Number.isFinite(u) &&
+            Number.isFinite(v) &&
+            u > 8 &&
+            v > 8 &&
+            u < this.w - 8 &&
+            v < this.h - 8
+          ) {
+            features.push(f);
+            guesses.push([u, v]);
+          }
+        }
+        // Homography is only an LK search seed. Final pose must pass 3D PnP checks.
+        return this.flow(key.gray, gray, features, guesses);
+      } finally {
+        current.keypoints.delete();
+        current.descriptors.delete();
+        matches.delete();
+        matcher.delete();
+        mats.forEach((m) => m.delete());
+      }
+    }
     saveKey(gray, k) {
-      this.key?.gray.delete();
-      this.key = {
+      // Always refresh the latest view, retaining older views only at distinct poses.
+      const last = this.keys.at(-1),
+        position = center(this.R, this.t);
+      let replace = false;
+      if (last) {
+        const d = norm(sub(position, last.anchorPosition)),
+          D = mul(this.R, tr(last.anchorR)),
+          a = Math.acos(
+            Math.max(-1, Math.min(1, (D[0][0] + D[1][1] + D[2][2] - 1) / 2)),
+          );
+        replace = d < 0.012 && a < 0.04;
+      }
+      const snapshot = {
         gray: gray.clone(),
+        orb: this.describe(gray),
         features: this.features
           .filter((f) => f.X)
           .map((f) => ({ ...f, p: f.p.slice() })),
         k,
+        R: this.R.map((r) => r.slice()),
+        position,
+        frame: this.frame,
+        anchorPosition: replace ? last.anchorPosition : position,
+        anchorR: replace ? last.anchorR : this.R.map((r) => r.slice()),
       };
+      if (replace) {
+        this.keys.pop();
+        last.gray.delete();
+        last.orb.keypoints.delete();
+        last.orb.descriptors.delete();
+      }
+      this.keys.push(snapshot);
+      while (this.keys.length > 6) {
+        const old = this.keys.shift();
+        old.gray.delete();
+        old.orb.keypoints.delete();
+        old.orb.descriptors.delete();
+      }
+      this.recoveryCursor = 0;
     }
     process(gray, k) {
       this.frame++;
@@ -432,6 +591,7 @@
         result.phase = "uncalibrated";
         if (this.features.length < 170) this.detect(gray, k);
       } else if (!this.initialized) {
+        result.status = this.initMessage || result.status;
         const seeded = this.features.filter((f) => f.k);
         if (seeded.length < 45) {
           this.features = [];
@@ -450,20 +610,48 @@
         }
       } else {
         let solved = this.pnp(this.features, k);
-        if (!solved && this.key && this.failures % 2 === 0) {
-          let backup = this.flow(this.key.gray, gray, this.key.features),
-            recovered = this.pnp(backup, k);
-          if (recovered) {
-            solved = recovered;
-            this.features = backup;
-            result.recovered = true;
-            this.recoveries++;
+        if (
+          !solved &&
+          this.keys.length &&
+          (this.failures < 3 || this.failures % 3 === 0)
+        ) {
+          // At most two references per frame; cycle through the retained local map.
+          for (
+            let attempt = 0;
+            attempt < Math.min(2, this.keys.length);
+            attempt++
+          ) {
+            const index =
+              attempt === 0
+                ? this.keys.length - 1
+                : this.keys.length -
+                  2 -
+                  (this.recoveryCursor++ % (this.keys.length - 1));
+            const key = this.keys[index];
+            let backup = this.flow(key.gray, gray, key.features),
+              recovered = this.pnp(backup, k, true);
+            if (!recovered && attempt === 0) {
+              const guided = this.guidedRecovery(key, gray);
+              if (guided.length >= 15) {
+                backup = guided;
+                recovered = this.pnp(backup, k, true);
+              }
+            }
+            if (recovered) {
+              solved = recovered;
+              this.features = backup;
+              result.recovered = true;
+              this.recoveries++;
+              break;
+            }
           }
         }
         if (solved) {
           this.R = solved.R;
           this.t = solved.t;
           this.failures = 0;
+          this.failureReason = "";
+          this.recoveryCursor = 0;
           let valid = new Set(solved.valid);
           this.features = this.features.filter((f) => !f.X || valid.has(f));
           let added = 0;
@@ -508,12 +696,12 @@
             phase: "lost",
             status: "추적 불확실 · 위치 유지 / 복구 중",
           });
-          if (this.failures >= 24) {
-            this.restart(gray, k);
-            result.segment = this.segment;
-            result.phase = "initializing";
-            result.status = "추적 손실 · 새 구간 초기화";
-          }
+          // Do not discard a map merely because a fixed number of frames failed.
+          // Position stays frozen until verified recovery or an explicit user reset.
+          result.status =
+            this.failures < 3
+              ? "일시적 추적 불확실 · 위치 유지"
+              : "지도 유지 · 여러 기준 영상에서 복구 중";
         }
       }
       this.prev?.delete();
@@ -534,6 +722,12 @@
           !!f.X,
         ]),
         recoveries: this.recoveries,
+        reason: result.phase === "lost" ? this.failureReason : "",
+        referenceFrames: this.keys.length,
+        retainedPoints: new Set(
+          this.keys.flatMap((key) => key.features.map((f) => f.X)),
+        ).size,
+        failedFrames: this.failures,
       };
     }
   }

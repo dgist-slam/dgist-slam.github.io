@@ -1,4 +1,4 @@
-importScripts("geometry.js?v=mapvo1", "tracker.js?v=mapvo1", "vendor/opencv.js");
+importScripts("geometry.js?v=mapvo2", "tracker.js?v=mapvo2", "vendor/opencv.js");
 let api, tracker;
 cv.then((c) => {
   api = c;
