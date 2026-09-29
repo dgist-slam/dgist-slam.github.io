@@ -8,7 +8,7 @@ const $ = (id) => document.getElementById(id),
   mc = map.getContext("2d");
 const PROCESS_HZ = 10,
   FRAME_INTERVAL = 1000 / PROCESS_HZ;
-let worker = new Worker("worker.js?v=init2"),
+let worker = new Worker("worker.js?v=rotation1"),
   ready = false,
   running = false,
   busy = false,
@@ -376,6 +376,7 @@ worker.onmessage = (e) => {
     references: d.referenceFrames,
     retained: d.retainedPoints,
     failedFrames: d.failedFrames,
+    guidedTracks: d.guidedTracks,
     ms: d.ms,
     position: position.slice(),
     pathLength: path.length,

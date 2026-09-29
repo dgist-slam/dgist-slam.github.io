@@ -28,12 +28,12 @@ WebGPU가 가능하면 WebGPU/WASM으로 실행하고, 미지원·GPU 실행 오
 ## 알고리즘
 
 1. VO 목표 10Hz (100ms 간격), 처리 너비 384px, Web Worker의 OpenCV.js / WASM CPU. 최대 300개 특징점을 격자별로 분산 검출.
-2. 피라미드 Lucas–Kanade + 양방향 오차 + 패치 오차로 추적점 검사.
+2. 최근 두 프레임의 검증된 영상 자세로 다음 특징점 위치를 예측하고, 이를 피라미드 Lucas–Kanade 검색 시작점으로 사용. 기존 3D 점은 예상 자세로 재투영하고, 아직 깊이가 없는 점은 회전만 적용. 양방향 오차·패치 오차·PnP 검증을 통과해야 자세를 갱신. 급정지/방향 전환으로 예측이 틀리면 일반 LK를 재시도하며, 추적이 끊긴 뒤에는 이전 속도를 외삽하지 않음.
 3. XFeat 키포인트/descriptor와 LighterGlue의 상호 일치·신뢰도 > 0.1 매칭을 구하고, 양방향 LK로 픽셀 위치를 보정. 초기화 시 학습 대응점은 충분하지만 LK 검증점이 부족하면 두 영상의 밝기 히스토그램을 평활화한 뒤 같은 LK 검사를 재시도. 회전 전용 모델 및 homography 퇴화를 검사한 뒤 두 영상으로 bootstrap. Essential matrix, cheirality, parallax, 양쪽 재투영 오차, 공간 분포 검사.
 4. 초기 삼각측량한 3D 점의 중앙 깊이를 1로 정규화하고 같은 스케일의 지도를 유지.
 5. 매 프레임 3D–2D PnP RANSAC + inlier 기반 반복 최적화. 재투영 오차·양의 깊이·화면 분포·과도한 자세 변화를 검사.
 6. 기존 3D 점을 계속 사용하면서 새 후보를 검출하고 다중 시점에서 삼각측량해 보충.
-7. 일시적 추적 실패 시 위치와 지도를 유지. 최대 6개 기준 영상을 보관하며 가장 최근 영상을 우선 검색. 큰 이동에서는 XFeat/LighterGlue 대응점 가까이의 기존 3D 지도점 관측을 연결해 LK 검색 위치를 잡고, 양방향 LK와 3D PnP로 다시 검증. 학습 대응점만으로 위치를 누적하지 않음. 모델 실패 대체 모드에서만 이전 ORB 경로를 사용.
+7. 일시적 추적 실패 시 위치와 지도를 유지. 최대 6개 기준 영상을 보관하며 가장 최근 영상을 우선 검색. 기준 영상의 3D 점도 최근 자세로 재투영해 LK 검색 위치를 잡음. 큰 이동에서는 XFeat/LighterGlue 대응점 가까이의 기존 3D 지도점 관측을 연결해 LK 검색 위치를 잡고, 양방향 LK와 3D PnP로 다시 검증. 학습 대응점만으로 위치를 누적하지 않음. 모델 실패 대체 모드에서만 이전 ORB 경로를 사용.
 8. 실패 프레임 수만으로 자동 재초기화하지 않음. 초기화 버튼·새 입력 시작·영상 크기 변경 시에만 새 구간 생성. 완전히 새로운 장면에서는 복구가 안 될 수 있으므로 사용자가 초기화해야 함.
 
 이전 버전의 키프레임마다 단위 이동을 더하는 방식을 제거했습니다. 전체 landmark BA, 루프 폐쇄, 전역 재지역화, IMU 융합, 미터 단위 스케일은 포함하지 않습니다. 동적 물체·반복 무늬·롤링 셔터·자동 초점·카메라 보정 오차에 여전히 취약할 수 있습니다.
@@ -42,7 +42,7 @@ WebXR는 카메라 영상을 제공하기 위해 자체 추적을 수행하지�
 
 ## 재현 검사
 
-Node.js에서 `node tests/regression.cjs` 및 `VO_TEST_HZ=10 node tests/regression.cjs`, `node tests/recovery.cjs`, `node tests/initialization-state.cjs` 실행. 추가 패키지 설치 없이 포함된 OpenCV 런타임으로 6개 합성 영상 시나리오(이동/정지/회전/짧은 가림/추적 후 회전/긴 추적 손실)를 검사합니다. 이 검사는 LK/ORB 대체 경로입니다. 학습 모델의 실제 브라우저 검사는 아래 절차로 재현합니다. 결과와 실제 영상 오검출 검사는 VALIDATION.md에 있습니다. 성능 수치는 데스크톱 검증으로, 휴대폰 성능 보장이 아닙니다.
+Node.js에서 `node tests/regression.cjs` 및 `VO_TEST_HZ=10 node tests/regression.cjs`, `node tests/recovery.cjs`, `node tests/initialization-state.cjs`, `node tests/rotation-tracking.cjs` 실행. 추가 패키지 설치 없이 포함된 OpenCV 런타임으로 6개 합성 영상 시나리오(이동/정지/회전/짧은 가림/추적 후 회전/긴 추적 손실)를 검사합니다. 이 검사는 LK/ORB 대체 경로입니다. 학습 모델의 실제 브라우저 검사는 아래 절차로 재현합니다. 결과와 실제 영상 오검출 검사는 VALIDATION.md에 있습니다. 성능 수치는 데스크톱 검증으로, 휴대폰 성능 보장이 아닙니다.
 
 학습 경로 재현 (모델 변환 환경은 `tools/requirements.txt`, 공식 원본 revision은 `models/manifest.json`):
 
@@ -50,7 +50,7 @@ Node.js에서 `node tests/regression.cjs` 및 `VO_TEST_HZ=10 node tests/regressi
 2. `python tools/export_models.py /path/to/accelerated_features models`로 모델 출력/원본 출력 비교를 포함해 변환합니다.
 3. `node tests/generate-learned-fixtures.cjs`로 테스트 영상을 생성합니다.
 4. `python tools/parity_reference.py /path/to/accelerated_features tests/generated`로 공식 PyTorch 매칭 정답을 생성합니다.
-5. 로컬 페이지에서 `tests/learned-parity-browser.js`와 `tests/learned-sequence-browser.js`를 브라우저 평가로 실행합니다. 실제 WASM 모델을 사용하며, 순수 회전/정지 거부와 지도 초기화·복구, 밝기 변화가 있는 이동/정지/회전을 검사합니다. 복구 검사는 저비용 LK 경로만 한 프레임 거부해 학습 경로를 강제로 선택하고, 학습 매칭과 최종 PnP는 실제 계산합니다.
+5. 로컬 페이지에서 `tests/learned-parity-browser.js`와 `tests/learned-sequence-browser.js`를 브라우저 평가로 실행합니다. 실제 WASM 모델을 사용하며, 순수 회전/정지 거부와 지도 초기화·복구·초기화 후 빠른 회전, 밝기 변화가 있는 이동/정지/회전을 검사합니다. 복구 검사는 저비용 LK 경로만 한 프레임 거부해 학습 경로를 강제로 선택하고, 학습 매칭과 최종 PnP는 실제 계산합니다.
 
 ## 로컬 실행
 

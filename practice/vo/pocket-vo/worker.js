@@ -1,6 +1,6 @@
 importScripts(
   "geometry.js?v=xlg1",
-  "tracker.js?v=init2",
+  "tracker.js?v=rotation1",
   "learned-matcher.js?v=xlg1",
   "vendor/ort/ort.webgpu.min.js",
   "vendor/opencv.js",

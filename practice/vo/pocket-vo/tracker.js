@@ -81,6 +81,10 @@
       this.initAttempt = 0;
       this.initMessage = "";
       this.initDiagnostics = null;
+      this.motion = null;
+      this.lastPoseFrame = -1;
+      this.prevK = null;
+      this.guidedTracks = 0;
       this.recoveries = 0;
     }
     detect(gray, k) {
@@ -350,6 +354,7 @@
       this.R = pose.R;
       this.t = scale(pose.t, s);
       this.initialized = true;
+      this.lastPoseFrame = this.frame;
       for (let { f, X } of landmarks) f.X = scale(X, s);
       this.features = landmarks.map((l) => l.f);
       Object.assign(this.initDiagnostics, {
@@ -485,6 +490,54 @@
       } finally {
         mats.forEach((m) => m.delete());
       }
+    }
+    predictedPose() {
+      // A one-frame visual motion model is only a search hint, never a pose result.
+      if (!this.motion || this.lastPoseFrame !== this.frame - 1)
+        return { R: this.R, t: this.t };
+      const R = mul(this.motion.R, this.R),
+        C = add(center(this.R, this.t), this.motion.C);
+      return { R, t: scale(mv(R, C), -1) };
+    }
+    poseGuidedFlow(previous, current, features, sourceK, k, sourceR) {
+      const predicted = this.predictedPose(),
+        rotation = mul(predicted.R, tr(sourceR)),
+        selected = [],
+        guesses = [];
+      for (const feature of features) {
+        let q;
+        if (feature.X) q = project(feature.X, predicted.R, predicted.t, k);
+        else {
+          const v = mv(rotation, ray(feature.p, sourceK));
+          if (v[2] > 0)
+            q = [
+              (k.fx * v[0]) / v[2] + ((k.skew || 0) * v[1]) / v[2] + k.cx,
+              (k.fy * v[1]) / v[2] + k.cy,
+            ];
+        }
+        if (
+          !q ||
+          !q.every(Number.isFinite) ||
+          q[0] < 8 ||
+          q[1] < 8 ||
+          q[0] >= this.w - 8 ||
+          q[1] >= this.h - 8
+        )
+          continue;
+        selected.push(feature);
+        guesses.push(q);
+      }
+      return this.flow(previous, current, selected, guesses);
+    }
+    recordMotion(R, t) {
+      this.motion =
+        this.lastPoseFrame === this.frame - 1
+          ? {
+              R: mul(R, tr(this.R)),
+              C: sub(center(R, t), center(this.R, this.t)),
+            }
+          : null;
+      this.lastPoseFrame = this.frame;
     }
     describe(gray) {
       const cv = this.cv,
@@ -647,9 +700,27 @@
       if (!this.prev) {
         this.detect(gray, k);
         this.prev = gray.clone();
+        this.prevK = k;
         return this.output(result);
       }
-      this.features = this.flow(this.prev, gray, this.features);
+      const previousFeatures = this.features;
+      const guided =
+        this.initialized &&
+        k &&
+        this.prevK &&
+        this.motion &&
+        this.lastPoseFrame === this.frame - 1;
+      this.features = guided
+        ? this.poseGuidedFlow(
+            this.prev,
+            gray,
+            previousFeatures,
+            this.prevK,
+            k,
+            this.R,
+          )
+        : this.flow(this.prev, gray, previousFeatures);
+      this.guidedTracks = guided ? this.features.length : 0;
       if (!k) {
         result.status = "K 미제공 · 특징점만 추적";
         result.phase = "uncalibrated";
@@ -674,6 +745,12 @@
         }
       } else {
         let solved = this.pnp(this.features, k);
+        if (!solved && guided) {
+          // Sudden stops/reversals invalidate constant velocity; retry plain LK.
+          const fallback = this.flow(this.prev, gray, previousFeatures);
+          solved = this.pnp(fallback, k);
+          if (solved) this.features = fallback;
+        }
         if (
           !solved &&
           this.keys.length &&
@@ -692,8 +769,19 @@
                   2 -
                   (this.recoveryCursor++ % (this.keys.length - 1));
             const key = this.keys[index];
-            let backup = this.flow(key.gray, gray, key.features),
+            let backup = this.poseGuidedFlow(
+                key.gray,
+                gray,
+                key.features,
+                key.k,
+                k,
+                key.R,
+              ),
               recovered = this.pnp(backup, k, true);
+            if (!recovered) {
+              backup = this.flow(key.gray, gray, key.features);
+              recovered = this.pnp(backup, k, true);
+            }
             if (!recovered && attempt === 0 && !this.learnedMode) {
               const guided = this.guidedRecovery(key, gray);
               if (guided.length >= 15) {
@@ -711,6 +799,7 @@
           }
         }
         if (solved) {
+          this.recordMotion(solved.R, solved.t);
           this.R = solved.R;
           this.t = solved.t;
           this.failures = 0;
@@ -772,6 +861,7 @@
       }
       this.prev?.delete();
       this.prev = gray.clone();
+      this.prevK = k;
       return this.output(result);
     }
     async processAsync(gray, k, matcher) {
@@ -914,6 +1004,8 @@
           const solved = this.pnp(recovered, k, true);
           if (solved) {
             this.features = solved.valid;
+            this.motion = null;
+            this.lastPoseFrame = this.frame;
             this.R = solved.R;
             this.t = solved.t;
             this.failures = 0;
@@ -971,6 +1063,7 @@
           this.keys.flatMap((key) => key.features.map((f) => f.X)),
         ).size,
         failedFrames: this.failures,
+        guidedTracks: this.guidedTracks,
       };
     }
   }

@@ -4,6 +4,7 @@
     "motion",
     "static",
     "rotation",
+    "fast-turn",
     "brightness-motion",
     "brightness-static",
     "brightness-rotation",
@@ -42,6 +43,11 @@
       )
     )
       throw Error("Normalized LK initialization was not exercised");
+    if (
+      kind === "fast-turn" &&
+      result.log.slice(15).filter((r) => r.phase === "tracking").length < 12
+    )
+      throw Error("Fast rotation tracking fell below 12/15 frames");
     reports[kind] = {
       backend: result.backend,
       trackingFrames: result.log.filter((r) => r.phase === "tracking").length,
