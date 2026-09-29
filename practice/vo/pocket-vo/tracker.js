@@ -80,6 +80,7 @@
       this.h = 0;
       this.initAttempt = 0;
       this.initMessage = "";
+      this.initDiagnostics = null;
       this.recoveries = 0;
     }
     detect(gray, k) {
@@ -242,25 +243,57 @@
       return cells.size;
     }
     bootstrap(k) {
-      this.initMessage =
-        "초기화 · 가까운 물체와 먼 배경을 함께 보며 옆으로 이동";
       let fs = this.features.filter((f) => f.k && f.age >= 3);
-      if (fs.length < 55 || this.coverage(fs) < 6) return null;
+      this.initDiagnostics = {
+        matches: fs.length,
+        coverage: this.coverage(fs),
+      };
+      const reject = (stage, message, extra = {}) => {
+        this.initMessage = message;
+        Object.assign(this.initDiagnostics, { stage, ...extra });
+        return null;
+      };
+      if (fs.length < 55)
+        return reject(
+          "matches",
+          `초기화 · 일치점 부족 (${fs.length}/55) · 무늬가 많은 장면을 비추세요`,
+        );
+      if (this.coverage(fs) < 6)
+        return reject(
+          "coverage",
+          `초기화 · 특징점이 한쪽에 몰림 (${this.coverage(fs)}/6 영역)`,
+        );
       let flow = med(fs.map((f) => norm(sub(f.p, f.base))));
       if (flow < 7) {
-        this.initMessage = "초기화 · 옆으로 조금 더 이동하세요";
-        return null;
+        return reject(
+          "displacement",
+          `초기화 · 영상 이동 ${flow.toFixed(1)}/7 px · 옆으로 조금 더 이동하세요`,
+          { flow },
+        );
       }
       let a = fs.map((f) => ray(f.base, f.k).slice(0, 2)),
         b = fs.map((f) => ray(f.p, k).slice(0, 2)),
         rotationOnly = G.rotationOnly(a, b, Math.max(k.fx, k.fy));
       if (rotationOnly) {
-        this.initMessage =
-          "회전 / 낮은 시차 · 옆으로 이동해야 깊이를 구할 수 있습니다";
-        return null;
+        return reject(
+          "rotation",
+          "회전 / 낮은 시차 · 방향을 유지하고 옆으로 이동하세요",
+          { flow },
+        );
       }
       let pose = G.estimate(a, b, Math.max(k.fx, k.fy));
-      if (!pose || pose.parallax < 0.012) return null;
+      if (!pose)
+        return reject(
+          "geometry",
+          "초기화 · 두 영상의 기하 검증 실패 · 천천히 이동하세요",
+          { flow },
+        );
+      if (pose.parallax < 0.012)
+        return reject(
+          "parallax",
+          "초기화 · 깊이를 구할 시차 부족 · 가까운 물체를 함께 비추세요",
+          { flow, parallax: pose.parallax },
+        );
       // Reject homography-dominated starts: planar/pure-rotation geometry has ambiguous depth.
       const cv = this.cv,
         mats = [];
@@ -283,9 +316,11 @@
         mats.push(H);
         let n = Array.from(mask.data).reduce((s, x) => s + (x ? 1 : 0), 0);
         if (n > fs.length * 0.93) {
-          this.initMessage =
-            "평면 위주 장면 · 가까운 물체와 먼 배경을 함께 보세요";
-          return null;
+          return reject(
+            "planar",
+            "평면 위주 장면 · 가까운 물체와 먼 배경을 함께 보세요",
+            { homographyRatio: n / fs.length },
+          );
         }
       } finally {
         mats.forEach((m) => m.delete());
@@ -296,16 +331,33 @@
           X = triangulate(f.base, f.k, I(), [0, 0, 0], f.p, k, pose.R, pose.t);
         if (X) landmarks.push({ f, X });
       }
-      if (landmarks.length < 40 || this.coverage(landmarks.map((l) => l.f)) < 6)
-        return null;
+      if (landmarks.length < 40)
+        return reject(
+          "landmarks",
+          `초기화 · 깊이 검증점 부족 (${landmarks.length}/40)`,
+          { landmarks: landmarks.length },
+        );
+      const coverage = this.coverage(landmarks.map((l) => l.f));
+      if (coverage < 6)
+        return reject(
+          "landmark-coverage",
+          `초기화 · 3D 점이 한쪽에 몰림 (${coverage}/6 영역)`,
+          { landmarks: landmarks.length },
+        );
       const depth = med(landmarks.map((l) => l.X[2]));
-      if (!(depth > 0)) return null;
+      if (!(depth > 0)) return reject("depth", "초기화 · 깊이 계산 검증 실패");
       const s = 1 / depth;
       this.R = pose.R;
       this.t = scale(pose.t, s);
       this.initialized = true;
       for (let { f, X } of landmarks) f.X = scale(X, s);
       this.features = landmarks.map((l) => l.f);
+      Object.assign(this.initDiagnostics, {
+        stage: "ready",
+        landmarks: landmarks.length,
+        flow,
+        parallax: pose.parallax,
+      });
       return { inliers: this.features.length, error: 0, initialized: true };
     }
     pnp(features, k, recovering = false) {
@@ -738,10 +790,9 @@
               learned: current,
               time: performance.now(),
             };
-            return this.output({
-              ...result,
-              status: "XFeat 기준 영상 확보 · 옆으로 천천히 이동",
-            });
+            this.initMessage =
+              "XFeat 기준 영상 확보 · 방향을 유지하고 옆으로 이동하세요";
+            return this.output({ ...result, status: this.initMessage });
           }
           const key = this.initKey;
           const matches = await matcher.match(key.learned, current);
@@ -755,13 +806,44 @@
             age: 3,
           }));
           const guesses = matches.map(([, j]) => current.points[j]);
-          const candidate = this.flow(key.gray, gray, features, guesses).slice(
+          let candidate = this.flow(key.gray, gray, features, guesses).slice(
             0,
             300,
           );
+          const rawTracks = candidate.length;
+          let method = "learned+LK";
+          // Auto-exposure can break LK's brightness assumption. Retry with
+          // histogram-normalized images, preserving subpixel and FB validation.
+          if (candidate.length < 55 && matches.length >= 55) {
+            const reference = new this.cv.Mat(),
+              currentGray = new this.cv.Mat();
+            try {
+              this.cv.equalizeHist(key.gray, reference);
+              this.cv.equalizeHist(gray, currentGray);
+              const normalized = this.flow(
+                reference,
+                currentGray,
+                features,
+                guesses,
+              ).slice(0, 300);
+              if (normalized.length > candidate.length) {
+                candidate = normalized;
+                method = "learned+normalized-LK";
+              }
+            } finally {
+              reference.delete();
+              currentGray.delete();
+            }
+          }
           const previous = this.features;
           this.features = candidate;
           const init = this.bootstrap(k);
+          Object.assign(this.initDiagnostics, {
+            learnedMatches: matches.length,
+            rawLkTracks: rawTracks,
+            lkTracks: candidate.length,
+            method,
+          });
           if (init) {
             this.learnedInitializations++;
             this.saveKey(gray, k);
@@ -777,12 +859,9 @@
             };
           } else {
             this.features = previous;
-            result.status =
-              candidate.length < 55
-                ? `초기화 · 일치점 ${candidate.length}/55 · 무늬가 많은 장면을 비추세요`
-                : this.initMessage;
+            result.status = this.initMessage;
             // If overlap was lost, acquire a new visual origin before any map exists.
-            if (matches.length < 20 && performance.now() - key.time > 2000) {
+            if (candidate.length < 55 && performance.now() - key.time > 2000) {
               key.gray.delete();
               this.initKey = {
                 gray: gray.clone(),
@@ -880,7 +959,13 @@
         recoveries: this.recoveries,
         learnedInitializations: this.learnedInitializations,
         learnedRecoveries: this.learnedRecoveries,
-        reason: result.phase === "lost" ? this.failureReason : "",
+        reason:
+          result.phase === "lost"
+            ? this.failureReason
+            : result.phase === "initializing"
+              ? this.initMessage
+              : "",
+        initialization: this.initDiagnostics,
         referenceFrames: this.keys.length,
         retainedPoints: new Set(
           this.keys.flatMap((key) => key.features.map((f) => f.X)),

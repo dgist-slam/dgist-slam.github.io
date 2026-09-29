@@ -85,6 +85,7 @@ onmessage = async ({ data: d }) => {
             learnedInitializations: r.learnedInitializations,
             learnedRecoveries: r.learnedRecoveries,
             references: r.referenceFrames,
+            initialization: r.initialization,
           });
         } finally {
           gray.delete();

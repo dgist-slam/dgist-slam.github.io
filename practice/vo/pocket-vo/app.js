@@ -8,7 +8,7 @@ const $ = (id) => document.getElementById(id),
   mc = map.getContext("2d");
 const PROCESS_HZ = 10,
   FRAME_INTERVAL = 1000 / PROCESS_HZ;
-let worker = new Worker("worker.js?v=xlg1"),
+let worker = new Worker("worker.js?v=init2"),
   ready = false,
   running = false,
   busy = false,
@@ -321,9 +321,11 @@ worker.onmessage = (e) => {
   $("trackingReason").textContent =
     d.phase === "lost"
       ? `${d.reason || "추적 불확실"} · 기준 영상 ${d.referenceFrames}개 / 지도점 ${d.retainedPoints}개 보존. 이전에 보던 장면으로 돌아가면 복구를 시도합니다.`
-      : d.referenceFrames
-        ? `복구용 기준 영상 ${d.referenceFrames}개 저장`
-        : "";
+      : d.phase === "initializing"
+        ? `${d.reason || "기준 영상 준비 중"}${d.initialization?.learnedMatches !== undefined ? ` · LightGlue ${d.initialization.learnedMatches}점 / LK ${d.initialization.lkTracks}점` : ""}`
+        : d.referenceFrames
+          ? `복구용 기준 영상 ${d.referenceFrames}개 저장`
+          : "";
   ctx.lineWidth = 1;
   for (let [x, y, u, v, mapped] of d.tracks) {
     ctx.strokeStyle = mapped ? "#8df3c388" : "#efb56e66";
@@ -370,6 +372,7 @@ worker.onmessage = (e) => {
     segment: d.segment,
     recoveries: d.recoveries,
     reason: d.reason,
+    initialization: d.initialization,
     references: d.referenceFrames,
     retained: d.retainedPoints,
     failedFrames: d.failedFrames,
