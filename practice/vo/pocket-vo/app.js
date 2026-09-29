@@ -8,7 +8,7 @@ const $ = (id) => document.getElementById(id),
   mc = map.getContext("2d");
 const PROCESS_HZ = 10,
   FRAME_INTERVAL = 1000 / PROCESS_HZ;
-let worker = new Worker("worker.js?v=hz10"),
+let worker = new Worker("worker.js?v=xlg1"),
   ready = false,
   running = false,
   busy = false,
@@ -266,6 +266,10 @@ function loop(now) {
 
 worker.onmessage = (e) => {
   let d = e.data;
+  if (d.type === "matcher-status") {
+    $("matcherState").textContent = d.message;
+    return;
+  }
   if (d.type === "ready") {
     ready = true;
     $("camera").disabled = false;
@@ -291,6 +295,9 @@ worker.onmessage = (e) => {
   lastResult = now;
   frameCount++;
   $("features").textContent = d.tracks.length;
+  if (d.matcher?.backend)
+    $("matcherState").textContent =
+      `${d.matcher.name} · ${d.matcher.backend} · 매칭 ${d.matcher.lastMatches || 0}점 / ${(d.matcher.lastMs || 0).toFixed(0)} ms · 평소 LK 추적`;
   $("ms").textContent = d.ms.toFixed(0);
   $("resolution").textContent = input.width + " × " + input.height + " / WASM";
   $("status").textContent = d.status + (mode === "demo" ? " · 합성 영상" : "");
@@ -348,6 +355,9 @@ worker.onmessage = (e) => {
   window.voDiagnostics = {
     mode,
     frames: frameCount,
+    matcher: d.matcher,
+    learnedInitializations: d.learnedInitializations,
+    learnedRecoveries: d.learnedRecoveries,
     targetHz: PROCESS_HZ,
     processedHz: fpsAverage,
     keyframes,

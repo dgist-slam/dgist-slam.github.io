@@ -42,7 +42,8 @@
     return X;
   }
   class Tracker {
-    constructor(cv, { processHz = 30 } = {}) {
+    constructor(cv, { processHz = 30, learnedMode = false } = {}) {
+      this.learnedMode = learnedMode;
       // Preserve approximate wall-time cadence at different image sampling rates.
       this.cadence = (framesAt30Hz) =>
         Math.max(1, Math.ceil((framesAt30Hz * processHz) / 30));
@@ -52,10 +53,16 @@
     }
     reset() {
       this.prev?.delete();
+      this.initKey?.gray.delete();
+      this.initKey = null;
+      this.nextLearnedAt = 0;
+      this.learnedCursor = 0;
+      this.learnedRecoveries = 0;
+      this.learnedInitializations = 0;
       for (const key of this.keys || []) {
         key.gray.delete();
-        key.orb.keypoints.delete();
-        key.orb.descriptors.delete();
+        key.orb?.keypoints.delete();
+        key.orb?.descriptors.delete();
       }
       this.prev = null;
       this.keys = [];
@@ -72,6 +79,7 @@
       this.w = 0;
       this.h = 0;
       this.initAttempt = 0;
+      this.initMessage = "";
       this.recoveries = 0;
     }
     detect(gray, k) {
@@ -445,6 +453,7 @@
       }
     }
     guidedRecovery(key, gray) {
+      key.orb ||= this.describe(key.gray);
       const cv = this.cv,
         current = this.describe(gray),
         matches = new cv.DMatchVectorVector(),
@@ -541,7 +550,7 @@
       }
       const snapshot = {
         gray: gray.clone(),
-        orb: this.describe(gray),
+        orb: this.learnedMode ? null : this.describe(gray),
         features: this.features
           .filter((f) => f.X)
           .map((f) => ({ ...f, p: f.p.slice() })),
@@ -555,15 +564,15 @@
       if (replace) {
         this.keys.pop();
         last.gray.delete();
-        last.orb.keypoints.delete();
-        last.orb.descriptors.delete();
+        last.orb?.keypoints.delete();
+        last.orb?.descriptors.delete();
       }
       this.keys.push(snapshot);
       while (this.keys.length > 6) {
         const old = this.keys.shift();
         old.gray.delete();
-        old.orb.keypoints.delete();
-        old.orb.descriptors.delete();
+        old.orb?.keypoints.delete();
+        old.orb?.descriptors.delete();
       }
       this.recoveryCursor = 0;
     }
@@ -599,7 +608,7 @@
         if (seeded.length < 45) {
           this.features = [];
           this.detect(gray, k);
-        } else if (this.frame % this.cadence(4) === 0) {
+        } else if (!this.learnedMode && this.frame % this.cadence(4) === 0) {
           let init = this.bootstrap(k);
           if (init) {
             this.saveKey(gray, k);
@@ -633,7 +642,7 @@
             const key = this.keys[index];
             let backup = this.flow(key.gray, gray, key.features),
               recovered = this.pnp(backup, k, true);
-            if (!recovered && attempt === 0) {
+            if (!recovered && attempt === 0 && !this.learnedMode) {
               const guided = this.guidedRecovery(key, gray);
               if (guided.length >= 15) {
                 backup = guided;
@@ -713,6 +722,148 @@
       this.prev = gray.clone();
       return this.output(result);
     }
+    async processAsync(gray, k, matcher) {
+      // The inexpensive LK/PnP path always runs first. Learned work is serialized
+      // by the worker and only needed for initialization or failed tracking.
+      let result = this.process(gray, k);
+      if (!k || result.phase === "tracking") return result;
+      if (performance.now() < this.nextLearnedAt) return result;
+      try {
+        const current = await matcher.extract(gray);
+        if (!this.initialized) {
+          if (!this.initKey) {
+            this.initKey = {
+              gray: gray.clone(),
+              k: { ...k },
+              learned: current,
+              time: performance.now(),
+            };
+            return this.output({
+              ...result,
+              status: "XFeat 기준 영상 확보 · 옆으로 천천히 이동",
+            });
+          }
+          const key = this.initKey;
+          const matches = await matcher.match(key.learned, current);
+          const features = matches.map(([i]) => ({
+            p: key.learned.points[i],
+            base: key.learned.points[i].slice(),
+            k: key.k,
+            R: I(),
+            t: [0, 0, 0],
+            X: null,
+            age: 3,
+          }));
+          const guesses = matches.map(([, j]) => current.points[j]);
+          const candidate = this.flow(key.gray, gray, features, guesses).slice(
+            0,
+            300,
+          );
+          const previous = this.features;
+          this.features = candidate;
+          const init = this.bootstrap(k);
+          if (init) {
+            this.learnedInitializations++;
+            this.saveKey(gray, k);
+            this.keys.at(-1).learned = current;
+            key.gray.delete();
+            this.initKey = null;
+            result = {
+              ...result,
+              phase: "tracking",
+              status: "XFeat + LighterGlue · 3D 지도 초기화",
+              inliers: init.inliers,
+              pose: this.pose(),
+            };
+          } else {
+            this.features = previous;
+            result.status =
+              candidate.length < 55
+                ? `초기화 · 일치점 ${candidate.length}/55 · 무늬가 많은 장면을 비추세요`
+                : this.initMessage;
+            // If overlap was lost, acquire a new visual origin before any map exists.
+            if (matches.length < 20 && performance.now() - key.time > 2000) {
+              key.gray.delete();
+              this.initKey = {
+                gray: gray.clone(),
+                k: { ...k },
+                learned: current,
+                time: performance.now(),
+              };
+            }
+          }
+        } else if (this.keys.length) {
+          // Alternate latest and older references: one learned match per attempt.
+          const cursor = this.learnedCursor++;
+          const index =
+            cursor % 2 === 0 || this.keys.length === 1
+              ? this.keys.length - 1
+              : this.keys.length -
+                2 -
+                (Math.floor(cursor / 2) % (this.keys.length - 1));
+          const key = this.keys[index];
+          key.learned ||= await matcher.extract(key.gray);
+          const matches = await matcher.match(key.learned, current);
+          const features = [],
+            guesses = [],
+            used = new Set();
+          // Associate a learned image match with an existing landmark observation.
+          // Nearby XFeat points only seed LK; LK refines the actual landmark pixel.
+          for (const [i, j] of matches.sort((a, b) => b[2] - a[2])) {
+            const p = key.learned.points[i],
+              q = current.points[j];
+            let nearest = null,
+              distance = 25;
+            for (const f of key.features) {
+              if (used.has(f)) continue;
+              const d = (f.p[0] - p[0]) ** 2 + (f.p[1] - p[1]) ** 2;
+              if (d < distance) {
+                distance = d;
+                nearest = f;
+              }
+            }
+            if (nearest) {
+              used.add(nearest);
+              features.push(nearest);
+              guesses.push([
+                q[0] + nearest.p[0] - p[0],
+                q[1] + nearest.p[1] - p[1],
+              ]);
+            }
+          }
+          const recovered = this.flow(key.gray, gray, features, guesses);
+          const solved = this.pnp(recovered, k, true);
+          if (solved) {
+            this.features = solved.valid;
+            this.R = solved.R;
+            this.t = solved.t;
+            this.failures = 0;
+            this.failureReason = "";
+            this.recoveryCursor = 0;
+            this.learnedCursor = 0;
+            this.recoveries++;
+            this.learnedRecoveries++;
+            this.detect(gray, k);
+            this.saveKey(gray, k);
+            this.keys.at(-1).learned = current;
+            result = {
+              ...result,
+              phase: "tracking",
+              status: "XFeat + LighterGlue · 지도 추적 복구",
+              recovered: true,
+              pose: this.pose(),
+              inliers: solved.inliers,
+              reprojection: solved.error,
+            };
+          }
+        }
+        return this.output(result);
+      } finally {
+        // At most two expensive attempts/sec, measured after completion. Slow
+        // devices get idle time rather than a backlog of stale camera images.
+        this.nextLearnedAt = performance.now() + 500;
+      }
+    }
     pose() {
       return { position: center(this.R, this.t), rotation: tr(this.R) };
     }
@@ -727,6 +878,8 @@
           !!f.X,
         ]),
         recoveries: this.recoveries,
+        learnedInitializations: this.learnedInitializations,
+        learnedRecoveries: this.learnedRecoveries,
         reason: result.phase === "lost" ? this.failureReason : "",
         referenceFrames: this.keys.length,
         retainedPoints: new Set(

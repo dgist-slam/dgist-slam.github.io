@@ -1,0 +1,27 @@
+{
+  "upstream": "https://github.com/verlab/accelerated_features",
+  "revision": "e92685f57f8318b18725c5c8c0bd28c7fe188d9a",
+  "models": {
+    "xfeat.onnx": {
+      "bytes": 2660641,
+      "sha256": "9e7b3f6c6f6e3556eaf5743be2fc51aa3d29e1edc593f2a7dfedc5e3bac7890d"
+    },
+    "lighterglue.onnx": {
+      "bytes": 4435721,
+      "sha256": "45deb8dacd9c29f5770fe98e22944ad06004b5c18f4499c992d69a4059a2adea"
+    }
+  },
+  "parity_max_abs_error": {
+    "xfeat.onnx": [
+      7.003545761108398e-07,
+      8.046627044677734e-07,
+      1.1920928955078125e-07
+    ],
+    "lighterglue.onnx": [
+      0.0006036758422851562
+    ]
+  },
+  "matcher": "XFeat-trained LighterGlue, 6 layers, 96D internal, 64D descriptors; no pruning",
+  "torch": "2.14.0",
+  "onnxruntime": "1.30.0"
+}

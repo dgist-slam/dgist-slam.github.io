@@ -8,7 +8,7 @@
     />
     <title>Pocket VO · 카메라와 움직임</title>
     <meta name="theme-color" content="#101820" />
-    <link rel="stylesheet" href="style.css?v=hz10" />
+    <link rel="stylesheet" href="style.css?v=xlg1" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23101820'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%238df3c3' stroke-width='3'/%3E%3C/svg%3E"
@@ -31,7 +31,10 @@
         ><button id="stop" class="secondary" disabled>중지</button
         ><button id="imu" class="secondary">IMU 연결</button>
       </section>
-      <p id="status" role="status">영상 처리 엔진 준비 중 · 약 10 MB</p>
+      <p id="status" role="status">영상 처리 엔진과 학습 모델 준비 중…</p>
+      <p id="matcherState" class="caption" role="status">
+        XFeat + LighterGlue 준비 중 · 첫 접속 약 44 MB (엔진 포함)
+      </p>
       <section class="panel intrinsics">
         <div class="panelhead">
           <h2>카메라 내부 파라미터</h2>
@@ -133,13 +136,15 @@
           회전·낮은 시차에서는 이동 갱신을 보류합니다.
         </p>
         <p>
-          격자별 Shi–Tomasi → 양방향 Lucas–Kanade → 두 영상으로 3D 점 초기화 →
-          PnP RANSAC + 재투영 최적화. 지도 점을 유지하고 보충하며, 추적 실패 시
-          최대 6개의 기준 영상에서 복구를 시도하며 지도를 자동으로 버리지
-          않습니다. 이번 버전은 Web Worker의 CPU/WASM 구현이며 GPU 가속은
-          아닙니다. 루프 폐쇄·번들 조정·IMU 융합·미터 단위 스케일은 포함하지
-          않습니다. 초록 점은 지도에 등록된 3D 점, 주황 점은 깊이 초기화를
-          기다리는 후보입니다.
+          XFeat + LighterGlue 매칭으로 두 영상의 3D 점 초기화 → 양방향
+          Lucas–Kanade 추적 → PnP RANSAC + 재투영 최적화. 지도 점을 유지하고
+          보충하며, 추적 실패 시 최대 6개의 기준 영상에서 복구를 시도하며 지도를
+          자동으로 버리지 않습니다. 초기화·복구에 XFeat용 LightGlue 경량 모델인
+          LighterGlue를 사용합니다. 학습 추론은 WebGPU 지원 시 GPU/WASM, 그
+          외에는 WASM에서 실행합니다. LK/PnP는 CPU/WASM이며 모델 실패 시 LK/ORB
+          대체 모드를 표시합니다. 루프 폐쇄·번들 조정·IMU 융합·미터 단위
+          스케일은 포함하지 않습니다. 초록 점은 지도에 등록된 3D 점, 주황 점은
+          깊이 초기화를 기다리는 후보입니다.
         </p>
         <p>
           카메라·IMU는 HTTPS 또는 localhost에서 사용하세요. iPhone에서는 버튼을
@@ -150,8 +155,8 @@
       <footer>POCKET VO / EXPERIMENTAL · 카메라 위치 추정의 첫 단계</footer>
     </main>
     <video id="video" muted playsinline hidden></video>
-    <script src="geometry.js?v=hz10"></script>
-    <script src="xr-camera.js?v=hz10"></script>
-    <script src="app.js?v=hz10"></script>
+    <script src="geometry.js?v=xlg1"></script>
+    <script src="xr-camera.js?v=xlg1"></script>
+    <script src="app.js?v=xlg1"></script>
   </body>
 </html>
